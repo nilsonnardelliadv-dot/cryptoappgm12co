@@ -920,8 +920,8 @@
                     for (let i = 0; i < plusDI.length; i++) {
                         const diDiff = Math.abs(plusDI[i] - minusDI[i]);
                         const diSum = plusDI[i] + minusDI[i];
-                        // Fix division by zero
-                        dx.push(diSum === 0 ? 0 : 100 * diDiff / diSum);
+                        // Fix division by zero - return 0 when no movement in either direction
+                        dx.push(diSum === 0 ? 0 : (100 * diDiff / diSum));
                     }
                     
                     // Calcular ADX como EMA do DX
@@ -1384,11 +1384,14 @@
                         clearTimeout(connectionTimeout);
                         console.log('WebSocket conectado');
                         
-                        // Implementar ping/pong keepalive a cada 30 segundos
+                        // Implementar keepalive check a cada 30 segundos
+                        // Binance WebSocket streams mantêm a conexão automaticamente
+                        // Este intervalo verifica o estado da conexão e pode detectar falhas silenciosas
                         App.State.wsKeepAlive = setInterval(() => {
-                            if (App.State.ws && App.State.ws.readyState === WebSocket.OPEN) {
-                                // Binance WebSocket não requer ping manual, mas podemos verificar o estado
-                                console.log('WebSocket keepalive check - connection active');
+                            if (!App.State.ws || App.State.ws.readyState !== WebSocket.OPEN) {
+                                console.warn('WebSocket connection lost - attempting reconnect');
+                                clearInterval(App.State.wsKeepAlive);
+                                App.Data.ws();
                             }
                         }, 30000);
                     };
@@ -1635,8 +1638,8 @@
                             let scoreBadge = card.querySelector('.score-badge');
                             if (scoreBadge) {
                                 scoreBadge.innerText = metrics.score.toFixed(0);
-                                // Remover classes de score antigas antes de adicionar nova
-                                scoreBadge.className = scoreBadge.className.replace(/bg-score-(high|mid|low)/g, '').trim();
+                                // Remover classes de score antigas antes de adicionar nova (usando classList)
+                                scoreBadge.classList.remove('bg-score-high', 'bg-score-mid', 'bg-score-low');
                                 const scoreClass = metrics.score > 70 ? 'bg-score-high' : (metrics.score < 40 ? 'bg-score-low' : 'bg-score-mid');
                                 scoreBadge.classList.add(scoreClass);
                             }
