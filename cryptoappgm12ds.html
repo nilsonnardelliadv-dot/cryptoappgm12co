@@ -83,7 +83,36 @@
         #metric-tooltip-overlay { 
             box-shadow: 0 -10px 60px rgba(0,0,0,0.95), 0 -1px 0 rgba(255,255,255,0.1); 
             transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
-            will-change: transform, opacity;
+        }
+        
+        /* Shadow Brand Glow - Missing CSS class */
+        .shadow-brand-glow {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+        }
+        
+        /* Scrollbar Thin - Missing CSS class */
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: #0b0e14;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: #232a3b;
+            border-radius: 3px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+            background: #3b82f6;
+        }
+        
+        /* Mask Image Gradient - Missing CSS class */
+        .mask-image-gradient {
+            mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
         }
         
         .tip-head { 
@@ -312,7 +341,7 @@
     <template id="card-template">
         <div class="card glass rounded-xl overflow-hidden hover:border-gray-500 transition-all duration-300 card-enter flex flex-col group border-t-2 border-t-transparent shadow-lg mobile-card" data-symbol="">
             <button class="btn-remove absolute top-2 right-2 text-gray-600 hover:text-red-500 z-20 opacity-0 group-hover:opacity-100 p-2 transition-opacity bg-dark-900/80 rounded-full backdrop-blur-sm" title="Remover"><i class="fa-solid fa-times"></i></button>
-            <div class="absolute inset-0 z-0 opacity-20 pointer-events-none h-24 top-0 mask-image-gradient" data-tip="val_spark"><svg class="sparkline-svg w-full h-full" preserveAspectRatio="none"><path class="sparkline-path fill-none stroke-brand-500 stroke-[1.5]" d=""></path></svg></div>
+            <div class="absolute inset-0 z-0 opacity-20 pointer-events-none h-24 top-0 mask-image-gradient" data-tip="val_spark"><svg class="sparkline-svg w-full h-full" viewBox="0 0 100 30" preserveAspectRatio="none"><path class="sparkline-path fill-none stroke-brand-500 stroke-[1.5]" d=""></path></svg></div>
             
             <div class="p-4 cursor-pointer card-header relative z-10 bg-gradient-to-b from-dark-800/40 to-transparent" onclick="App.UI.toggleCard(this)">
                 <div class="flex justify-between items-start mb-2">
@@ -409,8 +438,9 @@
                 klines1d: {}, 
                 metrics: {}, 
                 ws: null, 
+                wsKeepAlive: null,
                 charts: {}, 
-                activeCard: null,
+                isFetching: false,
                 // Cache para otimização
                 cache: {
                     btc1d: null,
@@ -682,13 +712,54 @@
                     interp: "Oposto do Spring. Movimento rápido acima de resistência sem sustentação.",
                     action: "Venda no UTAD ou na confirmação de falha (LPSY). Use stops acima do UTAD.",
                     tip: "UTADs bem-sucedidos têm volume decrescente no rompimento e crescente na reversão."
+                },
+
+                // --- SYSTEM TOOLTIPS (Missing entries from audit) ---
+                'sys_logo': { 
+                    title: "Wyckoff Pro Terminal", 
+                    what: "Sistema profissional de análise técnica baseado na metodologia Wyckoff.", 
+                    tip: "Desenvolvido para identificar oportunidades de alta probabilidade." 
+                },
+                'sys_update': { 
+                    title: "Última Atualização", 
+                    what: "Horário da última sincronização de dados com a Binance.", 
+                    tip: "Dados são atualizados automaticamente a cada 60 segundos." 
+                },
+                'sys_export': { 
+                    title: "Exportar Relatório", 
+                    what: "Gera um arquivo Excel (.xlsx) com todos os dados e métricas atuais.", 
+                    tip: "Útil para análise offline ou compartilhamento." 
+                },
+                'sys_manual_refresh': { 
+                    title: "Atualização Manual", 
+                    what: "Força uma atualização imediata de todos os dados.", 
+                    tip: "Use quando precisar dos dados mais recentes possíveis." 
+                },
+                'val_chart': { 
+                    title: "Gráfico de Candlestick", 
+                    what: "Visualização do histórico de preços em formato OHLC.", 
+                    tip: "Clique e arraste para navegar. Scroll para zoom." 
+                },
+                'm_history': { 
+                    title: "Simulador de Trades", 
+                    what: "Registra operações simuladas para acompanhamento.", 
+                    tip: "Não representa ordens reais. Apenas para estudo." 
+                },
+                'm_eval': { 
+                    title: "Sinal de Avaliação", 
+                    what: "Resumo da análise técnica do ativo.", 
+                    tip: "PERFECT = Alinhamento ideal. GOOD = Bom setup. NEUTRAL = Aguardar. POOR = Evitar." 
+                },
+                'm_vs_btc': { 
+                    title: "Performance vs Bitcoin", 
+                    what: "Diferença de rentabilidade em relação ao BTC nos últimos 7 dias.", 
+                    tip: "Valores positivos indicam que o ativo superou o BTC." 
                 }
             },
 
             // 2. CÁLCULOS TÉCNICOS REAIS (Institucionais)
             Calc: {
                 // Funções auxiliares
-                sum: arr => arr.reduce((a, b) => a + b, 0),
                 avg: arr => arr.reduce((a, b) => a + b, 0) / arr.length,
                 std: arr => {
                     const mean = App.Calc.avg(arr);
@@ -849,7 +920,8 @@
                     for (let i = 0; i < plusDI.length; i++) {
                         const diDiff = Math.abs(plusDI[i] - minusDI[i]);
                         const diSum = plusDI[i] + minusDI[i];
-                        dx.push(100 * diDiff / diSum);
+                        // Fix division by zero - return 0 when no movement in either direction
+                        dx.push(diSum === 0 ? 0 : (100 * diDiff / diSum));
                     }
                     
                     // Calcular ADX como EMA do DX
@@ -956,13 +1028,14 @@
                     const closes = klines.map(k => k.c);
                     const currentPrice = closes[closes.length - 1];
                     
-                    // Identificar pivôs de alta e baixa
+                    // Identificar pivôs de alta e baixa - aumentado de 5 para 10 para pivôs mais significativos
+                    const pivotWindow = 10;
                     const pivotHighs = [];
                     const pivotLows = [];
                     
-                    for (let i = 5; i < closes.length - 5; i++) {
-                        const isPivotHigh = closes[i] === Math.max(...closes.slice(i - 5, i + 6));
-                        const isPivotLow = closes[i] === Math.min(...closes.slice(i - 5, i + 6));
+                    for (let i = pivotWindow; i < closes.length - pivotWindow; i++) {
+                        const isPivotHigh = closes[i] === Math.max(...closes.slice(i - pivotWindow, i + pivotWindow + 1));
+                        const isPivotLow = closes[i] === Math.min(...closes.slice(i - pivotWindow, i + pivotWindow + 1));
                         
                         if (isPivotHigh) pivotHighs.push(closes[i]);
                         if (isPivotLow) pivotLows.push(closes[i]);
@@ -995,6 +1068,8 @@
                 },
                 
                 // Detecção Wyckoff Avançada
+                // Pesos documentados para o sistema de score:
+                // RSI: 20%, TREND: 25%, PHASE: 30%, SR: 15%, VOLUME: 10%
                 wyckoffAnalysis: (klines) => {
                     if (!klines || klines.length < 50) return { phase: 'Indeterminado', events: [], score: 50 };
                     
@@ -1190,9 +1265,14 @@
                     App.UI.grid();
                     App.UI.tables();
                     
+                    // Popular trade-list na inicialização
+                    App.Trade.populateAll();
+                    
                     // Configurar auto-refresh a cada 60 segundos
                     setInterval(() => { 
-                        let e = document.getElementById('countdown'); 
+                        let e = document.getElementById('countdown');
+                        if (!e) return;
+                        
                         let v = +e.innerText.replace('s',''); 
                         e.innerText = (v <= 1 ? 60 : v - 1) + 's'; 
                         if (v <= 1) App.Data.fetch(); 
@@ -1200,6 +1280,21 @@
                 },
                 
                 fetch: async () => {
+                    // Implementar cache check para evitar fetches redundantes
+                    const now = Date.now();
+                    if (now - App.State.cache.lastUpdate < 5000) {
+                        console.log('Cache hit - skipping fetch (less than 5 seconds since last update)');
+                        return;
+                    }
+                    
+                    // Prevenir múltiplos fetches simultâneos
+                    if (App.State.isFetching) {
+                        console.log('Fetch already in progress - skipping');
+                        return;
+                    }
+                    
+                    App.State.isFetching = true;
+                    
                     try {
                         // Buscar dados do BTC para comparação
                         let btcResponse = await fetch(`https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=35`);
@@ -1245,16 +1340,61 @@
                     } catch (error) {
                         console.error('Erro na atualização de dados:', error);
                         document.getElementById('last-update').innerText = 'Erro na conexão';
+                    } finally {
+                        App.State.isFetching = false;
                     }
                 },
                 
                 ws: () => {
-                    if (App.State.ws) {
+                    // Prevenir múltiplas conexões simultâneas
+                    if (App.State.ws && App.State.ws.readyState === WebSocket.CONNECTING) {
+                        console.log('WebSocket já está conectando...');
+                        return;
+                    }
+                    
+                    if (App.State.ws && App.State.ws.readyState === WebSocket.OPEN) {
                         App.State.ws.close();
                     }
                     
-                    let streams = App.State.tokens.map(t => t.toLowerCase() + '@ticker').join('/');
+                    // Limpar keepalive anterior se existir
+                    if (App.State.wsKeepAlive) {
+                        clearInterval(App.State.wsKeepAlive);
+                        App.State.wsKeepAlive = null;
+                    }
+                    
+                    // Validar tokens antes de conectar
+                    const validTokens = App.State.tokens.filter(t => /^[A-Z]+USDT$/.test(t));
+                    if (validTokens.length === 0) {
+                        console.error('Nenhum token válido para conectar WebSocket');
+                        return;
+                    }
+                    
+                    let streams = validTokens.map(t => t.toLowerCase() + '@ticker').join('/');
                     App.State.ws = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${streams}`);
+                    
+                    // Timeout de conexão (10 segundos)
+                    const connectionTimeout = setTimeout(() => {
+                        if (App.State.ws && App.State.ws.readyState !== WebSocket.OPEN) {
+                            console.error('Timeout de conexão WebSocket');
+                            App.State.ws.close();
+                        }
+                    }, 10000);
+                    
+                    App.State.ws.onopen = () => {
+                        clearTimeout(connectionTimeout);
+                        console.log('WebSocket conectado');
+                        
+                        // Implementar keepalive check a cada 30 segundos
+                        // Binance WebSocket streams mantêm a conexão automaticamente
+                        // Este intervalo verifica o estado da conexão e pode detectar falhas silenciosas
+                        App.State.wsKeepAlive = setInterval(() => {
+                            if (!App.State.ws || App.State.ws.readyState !== WebSocket.OPEN) {
+                                console.warn('WebSocket connection lost - attempting reconnect');
+                                clearInterval(App.State.wsKeepAlive);
+                                App.Data.ws();
+                            }
+                        }, 30000);
+                    };
                     
                     App.State.ws.onmessage = (e) => {
                         try {
@@ -1267,10 +1407,19 @@
                     
                     App.State.ws.onerror = (error) => {
                         console.error('Erro WebSocket:', error);
+                        clearTimeout(connectionTimeout);
                     };
                     
                     App.State.ws.onclose = () => {
                         console.log('WebSocket fechado. Tentando reconectar em 5 segundos...');
+                        clearTimeout(connectionTimeout);
+                        
+                        // Limpar keepalive
+                        if (App.State.wsKeepAlive) {
+                            clearInterval(App.State.wsKeepAlive);
+                            App.State.wsKeepAlive = null;
+                        }
+                        
                         setTimeout(() => App.Data.ws(), 5000);
                     };
                 }
@@ -1287,9 +1436,11 @@
                         img.dataset.tried = "1";
                         img.src = `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${symbol}.png`;
                     } else {
-                        // Fallback para ícone genérico
-                        img.style.display = 'none';
-                        img.parentElement.innerHTML = '<div class="w-10 h-10 rounded-full bg-dark-800 border border-gray-700 flex items-center justify-center"><i class="fa-solid fa-coins text-gray-500"></i></div>';
+                        // Fallback para ícone genérico - remover elemento original completamente
+                        const parent = img.parentElement;
+                        if (parent) {
+                            parent.innerHTML = '<div class="w-10 h-10 rounded-full bg-dark-800 border border-gray-700 flex items-center justify-center"><i class="fa-solid fa-coins text-gray-500"></i></div>';
+                        }
                     }
                 },
                 
@@ -1472,12 +1623,26 @@
                         // Preencher com dados se disponíveis
                         let metrics = App.State.metrics[symbol];
                         if (metrics) {
-                            card.querySelector('.price-display').innerText = '$' + metrics.price.toFixed(metrics.price < 1 ? 6 : 2);
-                            card.querySelector('.wyckoff-badge').innerText = metrics.phase;
+                            // Null safety para querySelectors
+                            const priceDisplay = card.querySelector('.price-display');
+                            if (priceDisplay) {
+                                priceDisplay.innerText = '$' + metrics.price.toFixed(metrics.price < 1 ? 6 : 2);
+                            }
                             
+                            const wyckoffBadge = card.querySelector('.wyckoff-badge');
+                            if (wyckoffBadge) {
+                                wyckoffBadge.innerText = metrics.phase;
+                            }
+                            
+                            // Fix: Corrigir aplicação de classes de score (evitar duplicação)
                             let scoreBadge = card.querySelector('.score-badge');
-                            scoreBadge.innerText = metrics.score.toFixed(0);
-                            scoreBadge.className += metrics.score > 70 ? ' bg-score-high' : (metrics.score < 40 ? ' bg-score-low' : ' bg-score-mid');
+                            if (scoreBadge) {
+                                scoreBadge.innerText = metrics.score.toFixed(0);
+                                // Remover classes de score antigas antes de adicionar nova (usando classList)
+                                scoreBadge.classList.remove('bg-score-high', 'bg-score-mid', 'bg-score-low');
+                                const scoreClass = metrics.score > 70 ? 'bg-score-high' : (metrics.score < 40 ? 'bg-score-low' : 'bg-score-mid');
+                                scoreBadge.classList.add(scoreClass);
+                            }
                             
                             let sparkPath = card.querySelector('.sparkline-path');
                             if (sparkPath) sparkPath.setAttribute('d', metrics.spark);
@@ -1538,6 +1703,8 @@
                     
                     let price = +data.c;
                     let priceElement = card.querySelector('.price-display');
+                    
+                    // Null safety check
                     if (!priceElement) return;
                     
                     let previousPrice = +priceElement.dataset.lastPrice || price;
@@ -1569,17 +1736,36 @@
                     let body = card.querySelector('.card-body');
                     if (!body) return;
                     
+                    let symbol = card.dataset.symbol;
+                    
                     if (body.classList.contains('hidden')) {
-                        // Fechar outros cards abertos
-                        document.querySelectorAll('.card-body').forEach(el => el.classList.add('hidden'));
+                        // Fechar outros cards abertos e garantir descarte de charts
+                        document.querySelectorAll('.card').forEach(c => {
+                            const otherBody = c.querySelector('.card-body');
+                            if (otherBody && !otherBody.classList.contains('hidden')) {
+                                otherBody.classList.add('hidden');
+                                
+                                // Descartar chart do card sendo fechado
+                                const otherSymbol = c.dataset.symbol;
+                                if (otherSymbol && App.State.charts[otherSymbol]) {
+                                    App.State.charts[otherSymbol].chart.remove();
+                                    delete App.State.charts[otherSymbol];
+                                }
+                            }
+                        });
                         
                         // Abrir este card
                         body.classList.remove('hidden');
                         
                         // Criar/atualizar gráfico se necessário
-                        let symbol = card.dataset.symbol;
                         let container = card.querySelector('.chart-container');
                         if (container && App.State.klines1h[symbol]) {
+                            // Limpar e remover chart existente antes de criar novo
+                            if (App.State.charts[symbol]) {
+                                App.State.charts[symbol].chart.remove();
+                                delete App.State.charts[symbol];
+                            }
+                            
                             container.innerHTML = '';
                             
                             let chart = LightweightCharts.createChart(container, {
@@ -1622,8 +1808,7 @@
                         // Fechar este card
                         body.classList.add('hidden');
                         
-                        // Remover gráfico para economizar recursos
-                        let symbol = card.dataset.symbol;
+                        // Remover gráfico para economizar recursos e prevenir memory leak
                         if (App.State.charts[symbol]) {
                             App.State.charts[symbol].chart.remove();
                             delete App.State.charts[symbol];
@@ -1712,6 +1897,33 @@
                         
                         tradeList.innerHTML = newTradeHTML + tradeList.innerHTML;
                     }
+                },
+                
+                // Popular todos os trade-lists na inicialização
+                populateAll: () => {
+                    if (!App.State.trades || App.State.trades.length === 0) return;
+                    
+                    App.State.tokens.forEach(symbol => {
+                        const card = document.querySelector(`.card[data-symbol="${symbol}"]`);
+                        if (!card) return;
+                        
+                        const tradeList = card.querySelector('.trade-list');
+                        if (!tradeList) return;
+                        
+                        // Filtrar trades deste símbolo
+                        const symbolTrades = App.State.trades.filter(t => t.symbol === symbol).slice(0, 5);
+                        
+                        if (symbolTrades.length > 0) {
+                            tradeList.innerHTML = symbolTrades.map(trade => `
+                                <div class="flex justify-between border-b border-gray-800/50 py-1">
+                                    <span class="${trade.type === 'buy' ? 'text-green-500' : 'text-red-500'} font-bold">
+                                        ${trade.type.toUpperCase()}
+                                    </span>
+                                    <span class="text-white">$${trade.price.toFixed(4)}</span>
+                                </div>
+                            `).join('');
+                        }
+                    });
                 }
             },
 
@@ -1745,6 +1957,8 @@
                 },
                 
                 check: (symbol, currentPrice) => {
+                    let alertsChanged = false;
+                    
                     App.State.alerts.forEach(alert => {
                         if (alert.active && alert.symbol === symbol) {
                             // Verificar se o preço atingiu o alerta (com tolerância de 0.5%)
@@ -1752,15 +1966,20 @@
                             
                             if (difference <= 0.005) { // 0.5% de tolerância
                                 alert.active = false;
+                                alertsChanged = true;
                                 
                                 // Mostrar notificação (simplificado)
                                 console.log(`ALERTA: ${symbol} atingiu $${currentPrice.toFixed(4)}`);
                                 
                                 // Em uma implementação real, aqui você mostraria uma notificação visual
-                                localStorage.setItem('wyckoff_alerts', JSON.stringify(App.State.alerts));
                             }
                         }
                     });
+                    
+                    // Persistir alertas após serem acionados
+                    if (alertsChanged) {
+                        localStorage.setItem('wyckoff_alerts', JSON.stringify(App.State.alerts));
+                    }
                 }
             },
 
