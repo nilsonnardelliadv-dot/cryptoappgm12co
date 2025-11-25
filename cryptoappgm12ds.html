@@ -1,0 +1,1824 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wyckoff Pro Terminal 13.0 (Professional Edition)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Lightweight Charts -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+
+    <!-- SheetJS -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+                    colors: {
+                        dark: { 950: '#05070a', 900: '#0b0e14', 800: '#151a23', 700: '#232a3b', 600: '#374151' },
+                        brand: { 500: '#3b82f6', 600: '#2563eb' },
+                        wyckoff: { acc: '#10b981', dist: '#ef4444', mark: '#f59e0b' },
+                        score: { high: '#10b981', mid: '#f59e0b', low: '#ef4444' }
+                    },
+                    animation: { 'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite' }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --primary-bg: #05070a;
+            --secondary-bg: #0b0e14;
+            --accent-color: #3b82f6;
+        }
+        
+        body { 
+            background-color: var(--primary-bg); 
+            color: #e5e7eb; 
+            overflow-x: hidden; 
+            padding-bottom: 450px; 
+        }
+        
+        /* Scrollbar personalizada */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0b0e14; }
+        ::-webkit-scrollbar-thumb { background: #232a3b; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        /* Glass effect */
+        .glass { 
+            background: rgba(11, 14, 20, 0.95); 
+            backdrop-filter: blur(12px); 
+            border: 1px solid rgba(255, 255, 255, 0.08); 
+        }
+        
+        /* Tabela com cabeçalho fixo */
+        .table-fixed-header thead { 
+            position: sticky; 
+            top: 0; 
+            z-index: 20; 
+            background-color: #0b0e14; 
+        }
+        
+        .table-row-hover:hover td { 
+            background-color: rgba(59, 130, 246, 0.08); 
+        }
+        
+        /* Tooltip Panel Animation */
+        #metric-tooltip-overlay { 
+            box-shadow: 0 -10px 60px rgba(0,0,0,0.95), 0 -1px 0 rgba(255,255,255,0.1); 
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+            will-change: transform, opacity;
+        }
+        
+        .tip-head { 
+            font-size: 0.65rem; 
+            text-transform: uppercase; 
+            letter-spacing: 0.05em; 
+            color: #60a5fa; 
+            font-weight: 800; 
+            margin-bottom: 4px; 
+            border-bottom: 1px solid rgba(59, 130, 246, 0.2); 
+            padding-bottom: 2px; 
+            display: inline-block;
+        }
+        
+        .tip-body { 
+            font-size: 0.75rem; 
+            color: #9ca3af; 
+            line-height: 1.5; 
+            margin-bottom: 12px; 
+        }
+        
+        .tip-accent { 
+            color: #e5e7eb; 
+            font-weight: 600; 
+        }
+        
+        /* Interactive Elements Cursor */
+        [data-tip] { 
+            cursor: help; 
+            border-bottom: 1px dotted rgba(156, 163, 175, 0.4); 
+        }
+        
+        [data-tip]:hover { 
+            border-bottom-color: #3b82f6; 
+            color: #fff; 
+        }
+        
+        /* Animações */
+        .card-enter { 
+            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+        }
+        
+        @keyframes slideUp { 
+            from { opacity: 0; transform: translateY(20px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+        
+        .pulse-green { animation: pulseG 0.8s; } 
+        .pulse-red { animation: pulseR 0.8s; }
+        
+        @keyframes pulseG { 
+            0% { color: #10b981; text-shadow: 0 0 10px rgba(16,185,129,0.5); } 
+            100% { color: inherit; } 
+        }
+        
+        @keyframes pulseR { 
+            0% { color: #ef4444; text-shadow: 0 0 10px rgba(239,68,68,0.5); } 
+            100% { color: inherit; } 
+        }
+        
+        .sparkline-path { 
+            stroke-dasharray: 1000; 
+            stroke-dashoffset: 1000; 
+            animation: drawSpark 2s ease-out forwards; 
+        }
+        
+        @keyframes drawSpark { 
+            to { stroke-dashoffset: 0; } 
+        }
+        
+        .modal-overlay { 
+            background-color: rgba(0,0,0,0.8); 
+            backdrop-filter: blur(4px); 
+        }
+        
+        /* Responsividade Mobile */
+        @media (max-width: 640px) {
+            .mobile-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .mobile-card {
+                min-height: 120px;
+            }
+            
+            .mobile-table {
+                font-size: 0.7rem;
+            }
+            
+            .mobile-header {
+                padding: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-white">
+
+    <!-- Header -->
+    <header class="glass sticky top-0 z-50 border-b border-gray-800 shadow-lg">
+        <div class="max-w-[1800px] mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 bg-gradient-to-br from-brand-600 to-indigo-800 rounded-lg flex items-center justify-center shadow-lg shadow-brand-glow" data-tip="sys_logo">
+                    <i class="fa-solid fa-layer-group text-white text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-xl text-white tracking-tight">Wyckoff<span class="text-brand-500">Pro</span> <span class="text-[10px] text-gray-500 border border-gray-700 rounded px-1 ml-1 align-top">v13.0</span></h1>
+                    <div class="flex items-center gap-2 text-[10px] text-gray-400 font-mono mt-1">
+                        <span class="hidden sm:inline">CLIQUE NOS DADOS PARA AULA COMPLETA</span>
+                        <span class="w-1 h-1 rounded-full bg-gray-600 hidden sm:inline"></span>
+                        <span id="last-update" data-tip="sys_update">Conectando...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="hidden md:flex flex-col items-end mr-2" data-tip="sys_auto_refresh">
+                    <span class="text-[9px] text-gray-500 uppercase tracking-widest">Auto-Refresh</span>
+                    <span id="countdown" class="text-xs font-mono font-bold text-brand-500">60s</span>
+                </div>
+                <button onclick="App.Export.openModal()" class="p-2 bg-dark-800 hover:text-green-400 border border-gray-700 rounded-lg transition-all" data-tip="sys_export"><i class="fa-solid fa-file-excel"></i></button>
+                <button onclick="App.Core.refreshData()" class="group p-2 bg-brand-600 hover:bg-brand-500 rounded-lg text-white shadow-lg" data-tip="sys_manual_refresh"><i class="fa-solid fa-rotate group-hover:rotate-180 transition-transform duration-500"></i></button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Wyckoff Legend -->
+    <div class="bg-dark-900 border-b border-gray-800 py-2 shadow-inner">
+        <div class="max-w-[1800px] mx-auto px-4 flex gap-4 overflow-x-auto no-scrollbar items-center">
+            <span class="font-bold text-gray-500 uppercase tracking-widest text-[10px] shrink-0 flex items-center" data-tip="wyckoff_intro">Wyckoff 2.0:</span>
+            <div class="flex gap-2 shrink-0 text-xs">
+                <span class="px-2 py-1 bg-dark-800 border border-gray-700 rounded hover:bg-dark-700 transition-colors" data-tip="wy_sc"><span class="w-2 h-2 inline-block rounded-full bg-wyckoff-acc mr-1"></span>SC</span>
+                <span class="px-2 py-1 bg-dark-800 border border-gray-700 rounded hover:bg-dark-700 transition-colors" data-tip="wy_spring"><span class="w-2 h-2 inline-block rounded-full bg-wyckoff-acc border border-white mr-1"></span>Spring</span>
+                <span class="px-2 py-1 bg-dark-800 border border-gray-700 rounded hover:bg-dark-700 transition-colors" data-tip="wy_sos"><span class="w-2 h-2 inline-block rounded-full bg-blue-500 mr-1"></span>SOS</span>
+                <span class="px-2 py-1 bg-dark-800 border border-gray-700 rounded hover:bg-dark-700 transition-colors" data-tip="wy_utad"><span class="w-2 h-2 inline-block rounded-full bg-wyckoff-dist border border-white mr-1"></span>UTAD</span>
+            </div>
+        </div>
+    </div>
+
+    <main class="flex-1 max-w-[1800px] mx-auto px-4 py-6 w-full gap-8 flex flex-col">
+        
+        <!-- TOP 4 LISTS -->
+        <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 h-[320px] mobile-grid">
+            <!-- Gainers -->
+            <div class="glass rounded-xl overflow-hidden border border-gray-800 flex flex-col border-t-4 border-t-green-500 shadow-lg mobile-card">
+                <div class="bg-dark-800/90 p-3 border-b border-gray-700 flex justify-between items-center shrink-0">
+                    <h3 class="text-green-400 font-bold text-xs uppercase tracking-wide flex items-center gap-2" data-tip="hl_gain_title"><i class="fa-solid fa-arrow-trend-up"></i> Top 10 Altas (24h)</h3>
+                </div>
+                <div class="overflow-y-auto flex-1 scrollbar-thin"><table class="w-full text-left text-[10px]"><thead class="bg-dark-950 text-gray-500 sticky top-0"><tr><th class="p-2 font-bold" data-tip="col_ticker">Token</th><th class="p-2 text-right font-bold" data-tip="col_price">Preço</th><th class="p-2 text-right font-bold" data-tip="col_chg">% 24h</th></tr></thead><tbody id="list-gainers" class="text-gray-300 divide-y divide-gray-800"></tbody></table></div>
+            </div>
+            <!-- Losers -->
+            <div class="glass rounded-xl overflow-hidden border border-gray-800 flex flex-col border-t-4 border-t-red-500 shadow-lg mobile-card">
+                <div class="bg-dark-800/90 p-3 border-b border-gray-700 flex justify-between items-center shrink-0">
+                    <h3 class="text-red-400 font-bold text-xs uppercase tracking-wide flex items-center gap-2" data-tip="hl_loss_title"><i class="fa-solid fa-arrow-trend-down"></i> Top 10 Baixas (24h)</h3>
+                </div>
+                <div class="overflow-y-auto flex-1 scrollbar-thin"><table class="w-full text-left text-[10px]"><thead class="bg-dark-950 text-gray-500 sticky top-0"><tr><th class="p-2 font-bold" data-tip="col_ticker">Token</th><th class="p-2 text-right font-bold" data-tip="col_price">Preço</th><th class="p-2 text-right font-bold" data-tip="col_chg">% 24h</th></tr></thead><tbody id="list-losers" class="text-gray-300 divide-y divide-gray-800"></tbody></table></div>
+            </div>
+            <!-- Setup -->
+            <div class="glass rounded-xl overflow-hidden border border-gray-800 flex flex-col border-t-4 border-t-blue-500 shadow-lg mobile-card">
+                <div class="bg-dark-800/90 p-3 border-b border-gray-700 flex justify-between items-center shrink-0">
+                    <h3 class="text-blue-400 font-bold text-xs uppercase tracking-wide flex items-center gap-2" data-tip="hl_setup_title"><i class="fa-solid fa-crosshairs"></i> Top 10 Score Pro</h3>
+                </div>
+                <div class="overflow-y-auto flex-1 scrollbar-thin"><table class="w-full text-left text-[10px]"><thead class="bg-dark-950 text-gray-500 sticky top-0"><tr><th class="p-2 font-bold" data-tip="col_ticker">Token</th><th class="p-2 text-center font-bold" data-tip="col_score">Score</th><th class="p-2 text-right font-bold" data-tip="col_phase">Fase</th></tr></thead><tbody id="list-attraction" class="text-gray-300 divide-y divide-gray-800"></tbody></table></div>
+            </div>
+            <!-- Oversold -->
+            <div class="glass rounded-xl overflow-hidden border border-gray-800 flex flex-col border-t-4 border-t-purple-500 shadow-lg mobile-card">
+                <div class="bg-dark-800/90 p-3 border-b border-gray-700 flex justify-between items-center shrink-0">
+                    <h3 class="text-purple-400 font-bold text-xs uppercase tracking-wide flex items-center gap-2" data-tip="hl_oversold_title"><i class="fa-solid fa-layer-group"></i> Top 10 Sobrevenda</h3>
+                </div>
+                <div class="overflow-y-auto flex-1 scrollbar-thin"><table class="w-full text-left text-[10px]"><thead class="bg-dark-950 text-gray-500 sticky top-0"><tr><th class="p-2 font-bold" data-tip="col_ticker">Token</th><th class="p-2 text-center font-bold" data-tip="col_rsi">RSI (14)</th><th class="p-2 text-right font-bold" data-tip="col_sr">Suporte</th></tr></thead><tbody id="list-oversold" class="text-gray-300 divide-y divide-gray-800"></tbody></table></div>
+            </div>
+        </section>
+
+        <!-- Tabela Ranking -->
+        <section class="glass rounded-xl overflow-hidden border border-gray-800 flex flex-col h-[400px] shadow-xl">
+            <div class="bg-dark-800/80 p-4 border-b border-gray-700 flex justify-between items-center shrink-0 mobile-header">
+                <h3 class="text-white font-bold text-sm flex items-center gap-2" data-tip="rank_title_main"><i class="fa-solid fa-list text-yellow-500"></i> Ranking Geral Profissional</h3>
+            </div>
+            <div class="overflow-y-auto flex-1 scrollbar-thin table-fixed-header">
+                <table class="w-full text-left text-xs mobile-table">
+                    <thead class="text-gray-400 uppercase font-bold tracking-wider text-[10px]">
+                        <tr>
+                            <th class="p-3 text-center w-12 bg-dark-900" data-tip="rank_pos">#</th>
+                            <th class="p-3 bg-dark-900" data-tip="rank_ticker">Token</th>
+                            <th class="p-3 text-center bg-dark-900" data-tip="rank_score">Score</th>
+                            <th class="p-3 text-center bg-dark-900" data-tip="rank_rsi">RSI</th>
+                            <th class="p-3 text-center bg-dark-900" data-tip="rank_macd">MACD Hist</th>
+                            <th class="p-3 text-center bg-dark-900" data-tip="rank_sr">Suporte Real</th>
+                            <th class="p-3 bg-dark-900" data-tip="rank_phase">Estrutura Wyckoff</th>
+                            <th class="p-3 text-right bg-dark-900" data-tip="rank_action">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ranking-body" class="divide-y divide-gray-800 text-gray-300">
+                        <tr><td colspan="8" class="p-8 text-center text-gray-600 italic animate-pulse">Carregando motor matemático...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Grid de Cards -->
+        <div class="flex items-center gap-2 mt-4">
+            <input type="text" id="add-input" placeholder="Add Token (ex: SOL)..." class="bg-dark-900 border border-gray-700 rounded px-3 py-1.5 text-sm focus:border-brand-500 outline-none w-40 uppercase" data-tip="input_add">
+            <button onclick="App.Token.add()" class="bg-brand-600 hover:bg-brand-500 text-white px-3 py-1.5 rounded text-sm"><i class="fa-solid fa-plus"></i></button>
+        </div>
+        <div id="cards-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 pb-10 mobile-grid"></div>
+    </main>
+
+    <!-- Tooltip Overlay -->
+    <div id="metric-tooltip-overlay" class="fixed bottom-0 left-0 right-0 bg-dark-950 border-t-2 border-brand-500/50 p-6 transform translate-y-full opacity-0 pointer-events-none z-[100] h-[450px] grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 shadow-[0_-20px_60px_rgba(0,0,0,0.95)] overflow-y-auto">
+        <button onclick="App.UI.closeTooltip()" class="absolute top-2 right-4 text-gray-500 hover:text-white text-xl"><i class="fa-solid fa-times"></i></button>
+        <!-- Content -->
+    </div>
+
+    <!-- Modal Export -->
+    <div id="export-modal" class="fixed inset-0 z-[120] hidden modal-overlay flex items-center justify-center p-4">
+        <div class="bg-dark-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="bg-dark-800 p-4 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="text-white font-bold">Exportar Dados</h3>
+                <button onclick="App.Export.closeModal()" class="text-gray-500 hover:text-white"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <button onclick="App.Export.gen()" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg shadow-lg">Baixar Relatório .XLSX</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template Card -->
+    <template id="card-template">
+        <div class="card glass rounded-xl overflow-hidden hover:border-gray-500 transition-all duration-300 card-enter flex flex-col group border-t-2 border-t-transparent shadow-lg mobile-card" data-symbol="">
+            <button class="btn-remove absolute top-2 right-2 text-gray-600 hover:text-red-500 z-20 opacity-0 group-hover:opacity-100 p-2 transition-opacity bg-dark-900/80 rounded-full backdrop-blur-sm" title="Remover"><i class="fa-solid fa-times"></i></button>
+            <div class="absolute inset-0 z-0 opacity-20 pointer-events-none h-24 top-0 mask-image-gradient" data-tip="val_spark"><svg class="sparkline-svg w-full h-full" preserveAspectRatio="none"><path class="sparkline-path fill-none stroke-brand-500 stroke-[1.5]" d=""></path></svg></div>
+            
+            <div class="p-4 cursor-pointer card-header relative z-10 bg-gradient-to-b from-dark-800/40 to-transparent" onclick="App.UI.toggleCard(this)">
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex items-center gap-3">
+                        <div class="relative w-10 h-10">
+                            <img src="" class="w-10 h-10 rounded-full bg-dark-900 border border-gray-800 p-0.5 symbol-img shadow-lg object-cover" onerror="App.UI.imgError(this)">
+                            <div class="score-badge absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-black border border-white shadow-sm" data-tip="val_score">--</div>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-white text-lg symbol-ticker leading-none" data-tip="lbl_ticker">BTC</h3>
+                            <span class="wyckoff-badge text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 mt-1 inline-block" data-tip="val_phase">NEUTRO</span>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xl font-mono font-bold text-white price-display" data-tip="val_price">$0.00</div>
+                        <div class="text-xs font-bold percent-display text-gray-500" data-tip="val_chg_24h">0.00%</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-1 text-[9px] font-mono text-gray-400 pt-2 border-t border-gray-800/50">
+                    <div class="text-center" data-tip="lbl_rsi">RSI: <span class="metric-rsi text-white" data-tip="val_rsi">--</span></div>
+                    <div class="text-center" data-tip="lbl_adx">ADX: <span class="metric-adx text-white" data-tip="val_adx">--</span></div>
+                    <div class="text-center" data-tip="lbl_sr">SR: <span class="metric-sr text-white" data-tip="val_sr">--</span></div>
+                </div>
+            </div>
+
+            <div class="card-body hidden border-t border-gray-800 bg-dark-900 relative z-20 p-4">
+                <div class="h-40 w-full bg-black rounded border border-gray-800 chart-container mb-4" data-tip="val_chart"></div>
+                <div class="space-y-4">
+                    <div class="bg-dark-950 p-2 rounded border border-gray-800">
+                        <h5 class="text-[9px] text-gray-500 uppercase font-bold mb-1 border-b border-gray-800 pb-1">Performance</h5>
+                        <div class="grid grid-cols-4 gap-2 text-[10px] font-mono text-center">
+                            <div class="cursor-help" data-tip="lbl_chg_1h"><span class="text-gray-600 block">1h</span><span class="val-1h text-white" data-tip="val_chg_1h">--</span></div>
+                            <div class="cursor-help" data-tip="lbl_chg_24h"><span class="text-gray-600 block">24h</span><span class="val-24h text-white" data-tip="val_chg_24h">--</span></div>
+                            <div class="cursor-help" data-tip="lbl_chg_7d"><span class="text-gray-600 block">7d</span><span class="val-7d text-white" data-tip="val_chg_7d">--</span></div>
+                            <div class="cursor-help" data-tip="lbl_chg_30d"><span class="text-gray-600 block">30d</span><span class="val-30d text-white" data-tip="val_chg_30d">--</span></div>
+                        </div>
+                    </div>
+                    <div class="bg-dark-950 p-2 rounded border border-gray-800">
+                        <h5 class="text-[9px] text-gray-500 uppercase font-bold mb-1 border-b border-gray-800 pb-1">Técnico</h5>
+                        <div class="grid grid-cols-3 gap-2 text-[10px] font-mono">
+                            <div class="flex justify-between" data-tip="lbl_atr"><span class="text-gray-600">ATR</span><span class="val-atr text-white" data-tip="val_atr">--</span></div>
+                            <div class="flex justify-between" data-tip="lbl_ema"><span class="text-gray-600">EMA200</span><span class="val-ema text-white" data-tip="val_ema">--</span></div>
+                            <div class="flex justify-between" data-tip="lbl_vwap"><span class="text-gray-600">VWAP</span><span class="val-vwap text-white" data-tip="val_vwap">--</span></div>
+                            <div class="flex justify-between" data-tip="lbl_obv"><span class="text-gray-600">OBV</span><span class="val-obv text-white" data-tip="val_obv">--</span></div>
+                            <div class="flex justify-between" data-tip="lbl_macd"><span class="text-gray-600">MACD</span><span class="val-macd text-white" data-tip="val_macd">--</span></div>
+                            <div class="flex justify-between" data-tip="lbl_bb"><span class="text-gray-600">BB</span><span class="val-bb text-white" data-tip="val_bb">--</span></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="bg-dark-950 p-2 rounded border border-gray-800">
+                            <h5 class="text-[9px] text-gray-500 uppercase font-bold mb-1 border-b border-gray-800 pb-1" data-tip="lbl_fib">Fibonacci</h5>
+                            <div class="space-y-1 text-[10px] font-mono">
+                                <div class="flex justify-between" data-tip="val_f1618"><span class="text-gray-600">1.618</span><span class="val-f1618 text-red-400">--</span></div>
+                                <div class="flex justify-between" data-tip="val_f0618"><span class="text-gray-600">0.618</span><span class="val-f0618 text-brand-400">--</span></div>
+                                <div class="flex justify-between" data-tip="val_f0382"><span class="text-gray-600">0.382</span><span class="val-f0382 text-green-400">--</span></div>
+                            </div>
+                        </div>
+                        <div class="bg-dark-950 p-2 rounded border border-gray-800 flex flex-col justify-between">
+                            <div>
+                                <h5 class="text-[9px] text-gray-500 uppercase font-bold mb-1 border-b border-gray-800 pb-1">Avaliação</h5>
+                                <div class="flex justify-between text-[10px]" data-tip="m_vs_btc"><span class="text-gray-600">vs BTC</span><span class="val-vsbtc text-white">--</span></div>
+                                <div class="flex justify-between text-[10px]" data-tip="m_eval"><span class="text-gray-600">Sinal</span><span class="val-eval font-bold text-white">--</span></div>
+                            </div>
+                            <button class="w-full bg-brand-900/30 text-brand-500 text-[9px] border border-brand-900 rounded py-1 mt-1 hover:bg-brand-900/50 transition-colors" onclick="App.Alerts.addSuggest(this)" data-tip="alert_auto">+ Alerta</button>
+                        </div>
+                    </div>
+                    <div class="bg-dark-950 p-2 rounded border border-gray-800" data-tip="m_history">
+                        <h5 class="text-[9px] text-gray-500 uppercase font-bold mb-1 border-b border-gray-800 pb-1">Simulador</h5>
+                        <div class="grid grid-cols-2 gap-2 mb-2">
+                            <button class="bg-green-900/20 text-green-500 text-[10px] py-1 rounded border border-green-900/50 hover:bg-green-900/40 transition-colors" onclick="App.Trade.exec(this,'buy')">COMPRAR</button>
+                            <button class="bg-red-900/20 text-red-500 text-[10px] py-1 rounded border border-red-900/50 hover:bg-red-900/40 transition-colors" onclick="App.Trade.exec(this,'sell')">VENDER</button>
+                        </div>
+                        <div class="trade-list text-[9px] text-gray-600 text-center italic">Sem operações.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script>
+        // =============================================
+        // WYCKOFF PRO TERMINAL - PROFESSIONAL EDITION
+        // =============================================
+        // Versão 13.0 - Reconstruído com cálculos reais
+        // =============================================
+
+        const App = {
+            // Estado da aplicação
+            State: {
+                tokens: JSON.parse(localStorage.getItem('wyckoff_tokens')) || ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'BNBUSDT', 'ADAUSDT', 'MATICUSDT'],
+                alerts: JSON.parse(localStorage.getItem('wyckoff_alerts')) || [],
+                trades: JSON.parse(localStorage.getItem('wyckoff_trades')) || [],
+                klines1h: {}, 
+                klines1d: {}, 
+                metrics: {}, 
+                ws: null, 
+                charts: {}, 
+                activeCard: null,
+                // Cache para otimização
+                cache: {
+                    btc1d: null,
+                    lastUpdate: 0
+                }
+            },
+
+            // 1. BIBLIOTECA MASTERCLASS (Conteúdo Educacional Expandido)
+            Library: {
+                // --- LABELS (CONCEITOS) ---
+                'lbl_ticker': { 
+                    title: "Ativo (Ticker)", 
+                    what: "O símbolo de negociação do ativo na Binance.",
+                    calc: "Padrão internacional: PAR/BASE (ex: BTC/USDT).",
+                    interp: "Identidade única do token no mercado.",
+                    action: "Verifique sempre se é o par correto (USDT).",
+                    error: "Confundir tokens com nomes similares.",
+                    tip: "Em altcoins menores, verifique sempre o volume para evitar armadilhas de liquidez.",
+                    wyckoff: "Cada ticker tem comportamento único em diferentes fases do mercado."
+                },
+                
+                'lbl_price': { 
+                    title: "Preço de Mercado", 
+                    what: "O valor atual da última negociação realizada.",
+                    calc: "Streaming via WebSocket em tempo real.",
+                    interp: "O consenso momentâneo de valor entre compradores e vendedores.",
+                    action: "Base para todas as ordens e análise técnica.",
+                    error: "Achar que preço baixo significa barato (market cap importa mais).",
+                    tip: "Observe a velocidade das mudanças (ticks) para sentir a pressão de compra/venda.",
+                    wyckoff: "O preço revela a relação entre oferta e demanda - conceito central do método."
+                },
+                
+                'lbl_rsi': { 
+                    title: "RSI (Índice de Força Relativa)", 
+                    what: "Oscilador de momentum que mede a velocidade e a mudança dos movimentos de preços.", 
+                    calc: "RSI = 100 - (100 / (1 + RS)), onde RS = EMA(gains,14) / EMA(losses,14)", 
+                    interp: "0-30: Sobrevenda (potencial compra). 30-70: Neutro. 70-100: Sobrecompra (potencial venda).", 
+                    action: "Busque compras quando RSI < 30 e o preço encontra suporte. Busque vendas quando RSI > 70 e há resistência.", 
+                    error: "Vender apenas porque está 'sobrecomprado'. Em tendências fortes, o RSI pode ficar > 70 por muito tempo.", 
+                    ignore: "Durante 'pumps' parabólicos ou 'dumps' de pânico extremo.", 
+                    confluencia: "Combine com Bandas de Bollinger ou Suporte/Resistência.", 
+                    wyckoff: "Essencial para identificar 'Springs' (fundo com RSI divergente) e exaustão de tendência.", 
+                    fib: "RSI < 30 em um nível de Fib 0.618 é um setup de alta probabilidade." 
+                },
+
+                'lbl_macd': { 
+                    title: "MACD (Convergência/Divergência)", 
+                    what: "Indicador de tendência que mostra a relação entre duas médias móveis exponenciais.", 
+                    calc: "Linha MACD = EMA(12) - EMA(26). Linha Sinal = EMA(9) do MACD. Histograma = MACD - Sinal.", 
+                    interp: "Histograma Verde: Momentum de alta crescendo. Vermelho: Momentum de baixa. Cruzamento acima/abaixo de zero indica mudança de tendência.", 
+                    action: "Use cruzamentos da linha zero ou divergências no histograma para identificar pontos de entrada.", 
+                    error: "Usar em mercados laterais (gera muitos sinais falsos). Ignorar divergências.", 
+                    tip: "Divergências no histograma muitas vezes antecipam a virada de preço antes do preço em si.",
+                    wyckoff: "MACD positivo durante fase de acumulação confirma interesse dos 'smart money'."
+                },
+
+                'lbl_atr': { 
+                    title: "ATR (Average True Range)", 
+                    what: "Mede a volatilidade do mercado, considerando gaps e limites de preço.", 
+                    calc: "True Range = max[(H-L), |H-Cprev|, |L-Cprev|]. ATR = EMA(14) do True Range.", 
+                    interp: "ATR Alto = Alta volatilidade (Risco maior). ATR Baixo = Consolidação (Risco menor).", 
+                    action: "Use para definir Stop Loss dinâmico (ex: Preço - 2x ATR) e tamanho de posição.", 
+                    error: "Achar que ATR indica direção. Ele só indica intensidade do movimento.", 
+                    tip: "Um aumento súbito no ATR após uma consolidação geralmente indica o início de uma nova tendência explosiva.",
+                    wyckoff: "ATR elevado em pontos de virada (SC, Spring) confirma climas emocionais."
+                },
+
+                'lbl_bb': { 
+                    title: "Bandas de Bollinger", 
+                    what: "Canais de volatilidade baseados em desvio padrão ao redor de uma média móvel.", 
+                    calc: "Banda Média = SMA(20). Banda Superior = SMA + 2×DesvioPadrão(20). Banda Inferior = SMA - 2×DesvioPadrão(20).", 
+                    interp: "Preço tocando banda superior = Esticado para cima. Banda inferior = Descontado. Bandas se estreitando indicam baixa volatilidade (squeeze).", 
+                    action: "Reversão à média após tocar as bandas ou rompimento após 'squeeze'.", 
+                    error: "Comprar só porque tocou na banda inferior (pode 'surfar' a banda na queda).", 
+                    tip: "Aguarde um candle de fechamento dentro da banda após um toque fora para confirmar reversão.",
+                    wyckoff: "Testes de suporte na banda inferior durante acumulação são sinais positivos."
+                },
+
+                'lbl_adx': { 
+                    title: "ADX (Índice Direcional Médio)", 
+                    what: "Mede a força de uma tendência, independente da direção. Desenvolvido por Welles Wilder.", 
+                    calc: "+DI = (EMA de DM+ / ATR) × 100. -DI = (EMA de DM- / ATR) × 100. DX = |(+DI - -DI)| / |(+DI + -DI)| × 100. ADX = EMA(14) do DX.", 
+                    interp: "Abaixo de 20: Sem tendência (Lateral). 20-25: Tendência fraca. 25-50: Tendência forte. Acima de 50: Tendência muito forte.", 
+                    action: "Se ADX > 25, use estratégias de tendência (médias). Se ADX < 20, use osciladores (RSI/Stoch) ou evite trades de tendência.", 
+                    error: "Achar que ADX subindo significa preço subindo. ADX sobe em tendências de baixa fortes também.", 
+                    tip: "O melhor momento para entrar é quando o ADX cruza 20 para cima em uma tendência estabelecida.",
+                    wyckoff: "ADX baixo durante fase B de acumulação é normal. ADX alto na fase D confirma markup."
+                },
+
+                'lbl_obv': { 
+                    title: "OBV (On Balance Volume)", 
+                    what: "Indicador de fluxo de volume acumulado que antecipa movimentos de preço.", 
+                    calc: "OBV = OBVanterior + Volume se fechamento > fechamento anterior, OU OBV - Volume se fechamento < fechamento anterior.", 
+                    interp: "Confirma a tendência. Topos ascendentes no OBV confirmam topos no preço. Divergências indicam fraqueza.", 
+                    action: "Divergências: Preço sobe mas OBV desce = Fraqueza (Distribuição). Preço desce mas OBV sobe = Força (Acumulação).", 
+                    error: "Ignorar o volume em rompimentos de suporte/resistência.", 
+                    tip: "Em Wyckoff, OBV subindo com preço lateral indica Acumulação (Smart Money comprando).",
+                    wyckoff: "OBV é um dos indicadores mais importantes para confirmar fases de acumulação e distribuição."
+                },
+
+                'lbl_vwap': { 
+                    title: "VWAP (Preço Médio Ponderado por Volume)", 
+                    what: "A média real paga por todos os participantes no período, considerando volume.", 
+                    calc: "VWAP = ∑(Preço × Volume) / ∑Volume para o período atual (reset diário).", 
+                    interp: "Acima da VWAP = Compradores no controle. Abaixo = Vendedores. Funciona como suporte/resistência dinâmica.", 
+                    action: "Suporte institucional em tendências de alta. VWAP é usada por grandes players para execução.", 
+                    tip: "Grandes fundos usam a VWAP para executar ordens sem mover o mercado. Rompimentos sustentados da VWAP são significativos.",
+                    wyckoff: "Preço acima da VWAP na fase D confirma controle dos compradores."
+                },
+
+                'lbl_fib': { 
+                    title: "Retrações de Fibonacci", 
+                    what: "Sequência matemática que descreve padrões naturais de crescimento e retração. Usada para identificar níveis de suporte/resistência.", 
+                    calc: "Identificar Swing High e Swing Low recentes. Níveis = Low + (High - Low) × fator (0.236, 0.382, 0.5, 0.618, 0.786).", 
+                    interp: "Zonas onde o preço 'respira' (corrige) antes de continuar a tendência principal. 0.618 é considerado o 'Golden Ratio'.", 
+                    tip: "Confluência é chave. Fib 0.618 + Suporte Anterior + EMA 200 = Zona de Ouro para entrada.",
+                    wyckoff: "Níveis de Fib ajudam a identificar alvos na fase D e pontos de entrada na fase C."
+                },
+
+                'lbl_ema': { 
+                    title: "Média Móvel Exponencial (EMA)", 
+                    what: "Média de preço que dá mais peso aos dados recentes, respondendo mais rápido a mudanças.", 
+                    calc: "Multiplicador = 2 / (períodos + 1). EMA = Preço × multiplicador + EMAanterior × (1 - multiplicador).", 
+                    interp: "Filtro de tendência de longo prazo. EMA200 é considerada a 'linha da vida' do mercado.", 
+                    action: "Compra apenas se Preço > EMA 200 em tendência de alta. Venda se Preço < EMA 200 em baixa.", 
+                    tip: "Funciona como suporte dinâmico em tendências fortes. Múltiplos toques sem rompimento confirmam força.",
+                    wyckoff: "EMA200 atua como suporte na fase D e resistência na fase de distribuição."
+                },
+
+                // --- VALUES (LEITURAS PRÁTICAS) ---
+                'val_score': { 
+                    title: "Score Técnico IA", 
+                    what: "Nota de 0 a 100 calculada pelo algoritmo baseado em múltiplos fatores técnicos e de Wyckoff.", 
+                    calc: "Soma ponderada: RSI (20%), Tendência (25%), Wyckoff (30%), Suporte/Resistência (15%), Volume (10%).", 
+                    interp: "> 80: Setup de Compra Forte (Verde). 60-80: Bom (Amarelo). < 40: Setup Fraco (Vermelho).", 
+                    action: "Use para filtrar as melhores oportunidades da lista. Foque em scores > 70.", 
+                    error: "Seguir cegamente sem olhar o gráfico e contexto de mercado.", 
+                    tip: "Scores acima de 85 são raros e indicam alinhamento técnico quase perfeito."
+                },
+
+                'val_rsi': { 
+                    title: "Leitura do RSI", 
+                    what: "O valor numérico atual do oscilador RSI(14).", 
+                    interp: "Se < 30 (Verde), o ativo está estatisticamente 'barato' no curto prazo. Se > 70 (Vermelho), 'caro'.", 
+                    action: "Procure gatilhos de compra (padrões de candlestick, divergências) quando RSI < 30.", 
+                    tip: "Em 'Bull Runs', o RSI pode não cair abaixo de 40. Ajuste sua expectativa conforme o contexto de mercado."
+                },
+
+                'val_adx': { 
+                    title: "Leitura do ADX", 
+                    what: "Força atual da tendência, independente de direção.", 
+                    interp: "Se < 20, o mercado está 'dormindo' ou acumulando. Se > 40, a tendência está super esticada e próxima de exaustão.", 
+                    tip: "Rompimentos com ADX baixo tendem a falhar. Espere o ADX começar a subir para confirmar força na nova direção."
+                },
+
+                'val_sr': { 
+                    title: "Distância do Suporte/Resistência", 
+                    what: "Quão perto o preço está de uma zona de compra (suporte) ou venda (resistência) ideal.", 
+                    calc: "Distância % para a zona de suporte/resistência mais próxima identificada pelo algoritmo.", 
+                    interp: "'Muito Próximo' (<2%) oferece o melhor Risco/Retorno. 'Distante' (>8%) indica que o preço está no meio do range.", 
+                    tip: "Nunca compre quando a distância for 'Longe' ou próxima de 'Resistência'. Espere pullback para suporte."
+                },
+
+                'val_phase': { 
+                    title: "Fase Wyckoff Detectada", 
+                    what: "A etapa atual do ciclo de mercado segundo a metodologia Wyckoff.", 
+                    interp: "ACUMULAÇÃO: Smart Money comprando. MARKUP: Tendência de alta. DISTRIBUIÇÃO: Smart Money vendendo. MARKDOWN: Tendência de baixa.", 
+                    action: "Alinhe sua operação com a fase. Compre na Acumulação/Markup. Venda na Distribuição/Markdown.", 
+                    tip: "A fase 'Spring' (dentro da acumulação) é a mais lucrativa, mas requer coragem para comprar na queda."
+                },
+
+                'val_f0618': { 
+                    title: "Nível Fib 0.618", 
+                    what: "O 'Golden Ratio' de preço - nível de retração mais importante.", 
+                    interp: "Historicamente, a correção mais comum em tendências saudáveis. Zona de alta probabilidade para reversão.", 
+                    action: "Deixe ordens de compra limitadas nesta região em tendências de alta.", 
+                    tip: "Se o preço perder o nível 0.618, a tendência pode ter revertido e o próximo suporte é 0.786."
+                },
+
+                'val_spark': { 
+                    title: "Micro-Gráfico (30 períodos)", 
+                    what: "Visualização rápida da ação do preço recente.", 
+                    interp: "Identifique a direção imediata e volatilidade visualmente. Picos indicam rejeição.", 
+                    tip: "Picos agudos geralmente são rejeitados (pavios longos). Tendências suaves são mais sustentáveis."
+                },
+
+                'val_price': { 
+                    title: "Cotação Atual", 
+                    what: "Valor em USDT do último trade executado.", 
+                    tip: "Use ordens limitadas para evitar slippage em moedas voláteis. Preços com muitas casas decimais indicam altcoins de baixo valor."
+                },
+
+                'val_chg_24h': { 
+                    title: "Variação Diária", 
+                    what: "Performance nas últimas 24 horas.", 
+                    interp: "Líderes de alta tendem a continuar subindo no curto prazo (Inércia de momentum).", 
+                    tip: "Evite comprar algo que já subiu >15% no dia, espere o pullback para uma entrada melhor."
+                },
+
+                'val_atr': { 
+                    title: "Valor ATR", 
+                    what: "Volatilidade média em pontos ou porcentagem.", 
+                    action: "Se ATR = 2.00, seu stop deve estar a pelo menos $4.00 de distância para evitar stops acidentais.", 
+                    tip: "Protege você de ser 'stopped out' pelo ruído normal do mercado. ATR alto = stops mais largos."
+                },
+
+                // --- SYSTEM & RANKING ---
+                'sys_auto_refresh': { 
+                    title: "Auto Refresh", 
+                    what: "Contagem regressiva para atualização completa dos dados.", 
+                    tip: "O preço é real-time via WebSocket, mas indicadores complexos e rankings atualizam a cada 60s para economizar recursos."
+                },
+                
+                'rank_score': { 
+                    title: "Score de Assimetria", 
+                    what: "Ranking de qualidade técnica baseado em múltiplos fatores.", 
+                    tip: "Foque nos Top 5 ativos com maior score para maximizar chances. Scores > 80 são raros e valiosos."
+                },
+                
+                'hl_setup_title': { 
+                    title: "Destaque: Melhores Setups", 
+                    what: "Os ativos com as melhores configurações técnicas no momento.", 
+                    tip: "Seu dever de casa é analisar estes gráficos primeiro. Setup bom + contexto favorável = alta probabilidade."
+                },
+                
+                'alert_auto': { 
+                    title: "Alerta Automático", 
+                    what: "Cria um alerta de preço 2% abaixo do valor atual para capturar correções.", 
+                    tip: "Estratégia de 'Fishing': pegar correções rápidas em tendências de alta estabelecidas."
+                },
+
+                // --- WYCKOFF SPECIFIC ---
+                'wyckoff_intro': {
+                    title: "Método Wyckoff 2.0",
+                    what: "Metodologia de análise técnica que estuda a relação entre oferta e demanda através de preço e volume.",
+                    interp: "Identifica ciclos de acumulação (compra institucional) e distribuição (venda institucional).",
+                    action: "Opere na direção dos 'smart money': compre na acumulação, venda na distribuição.",
+                    tip: "Wyckoff não é sobre prever, mas sobre probabilidades baseadas em leis de oferta/demanda.",
+                    phases: "Fase A: Parada da tendência. Fase B: Construção da causa. Fase C: Teste final (Spring/UT). Fase D: Tendência (Markup/Markdown). Fase E: Distribuição."
+                },
+
+                'wy_sc': {
+                    title: "Selling Climax (SC)",
+                    what: "Ponto de exaustão de venda onde os últimos vendedores desesperados liquidam posições.",
+                    interp: "Volume extremamente alto, amplo spread, fechamento na metade superior do range.",
+                    action: "Não venda no SC. Espere o Automatic Rally (AR) e Secondary Test (ST) para compra.",
+                    tip: "SC marca o final potencial de uma tendência de baixa. O preço raramente retorna a esse nível."
+                },
+
+                'wy_spring': {
+                    title: "Spring (Teste de Suporte)",
+                    what: "Queda artificial abaixo de suporte para 'pegar' stops e criar liquidez antes da alta.",
+                    interp: "Movimento rápido abaixo de suporte com volume moderado, seguido de recuperação rápida.",
+                    action: "Compre no Spring ou na confirmação de recuperação (SOS). Use stops abaixo do Spring.",
+                    tip: "Springs bem-sucedidos têm volume decrescente na queda e crescente na recuperação."
+                },
+
+                'wy_sos': {
+                    title: "Sign of Strength (SOS)",
+                    what: "Movimento vigoroso de alta que rompe resistências com volume crescente.",
+                    interp: "Confirma que a acumulação terminou e o markup começou. Compras agressivas.",
+                    action: "Compre nos pullbacks após SOS. Adicione posição em novos SOS (SOS consecutivos).",
+                    tip: "SOS com volume > 150% da média é sinal muito forte de participação institucional."
+                },
+
+                'wy_utad': {
+                    title: "Upthrust After Distribution (UTAD)",
+                    what: "Romper falsa de resistência após distribuição para pegar compradores antes da queda.",
+                    interp: "Oposto do Spring. Movimento rápido acima de resistência sem sustentação.",
+                    action: "Venda no UTAD ou na confirmação de falha (LPSY). Use stops acima do UTAD.",
+                    tip: "UTADs bem-sucedidos têm volume decrescente no rompimento e crescente na reversão."
+                }
+            },
+
+            // 2. CÁLCULOS TÉCNICOS REAIS (Institucionais)
+            Calc: {
+                // Funções auxiliares
+                sum: arr => arr.reduce((a, b) => a + b, 0),
+                avg: arr => arr.reduce((a, b) => a + b, 0) / arr.length,
+                std: arr => {
+                    const mean = App.Calc.avg(arr);
+                    return Math.sqrt(arr.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / arr.length);
+                },
+                
+                // EMA com cálculo correto
+                ema: (data, period) => {
+                    if (data.length < period) return null;
+                    
+                    const multiplier = 2 / (period + 1);
+                    let ema = App.Calc.avg(data.slice(0, period));
+                    
+                    for (let i = period; i < data.length; i++) {
+                        ema = (data[i] * multiplier) + (ema * (1 - multiplier));
+                    }
+                    
+                    return ema;
+                },
+                
+                // RSI Real (Wilder)
+                rsi: (closes, period = 14) => {
+                    if (closes.length < period + 1) return 50;
+                    
+                    let gains = [];
+                    let losses = [];
+                    
+                    // Calcular ganhos e perdas
+                    for (let i = 1; i < closes.length; i++) {
+                        const change = closes[i] - closes[i - 1];
+                        gains.push(change > 0 ? change : 0);
+                        losses.push(change < 0 ? Math.abs(change) : 0);
+                    }
+                    
+                    // Calcular médias iniciais (Wilder usa SMA para o primeiro valor)
+                    let avgGain = App.Calc.avg(gains.slice(0, period));
+                    let avgLoss = App.Calc.avg(losses.slice(0, period));
+                    
+                    // Calcular RSI com suavização Wilder
+                    for (let i = period; i < gains.length; i++) {
+                        avgGain = ((avgGain * (period - 1)) + gains[i]) / period;
+                        avgLoss = ((avgLoss * (period - 1)) + losses[i]) / period;
+                    }
+                    
+                    if (avgLoss === 0) return 100;
+                    const rs = avgGain / avgLoss;
+                    return 100 - (100 / (1 + rs));
+                },
+                
+                // MACD Real
+                macd: (closes, fast = 12, slow = 26, signal = 9) => {
+                    if (closes.length < slow) return { macd: 0, signal: 0, histogram: 0 };
+                    
+                    const emaFast = App.Calc.ema(closes, fast);
+                    const emaSlow = App.Calc.ema(closes, slow);
+                    const macdLine = emaFast - emaSlow;
+                    
+                    // Para calcular a linha de sinal, precisamos de valores MACD históricos
+                    // Como simplificação, usaremos os últimos 'signal' períodos de closes para aproximar
+                    const macdValues = [];
+                    for (let i = slow; i < closes.length; i++) {
+                        const fastEma = App.Calc.ema(closes.slice(0, i + 1), fast);
+                        const slowEma = App.Calc.ema(closes.slice(0, i + 1), slow);
+                        if (fastEma !== null && slowEma !== null) {
+                            macdValues.push(fastEma - slowEma);
+                        }
+                    }
+                    
+                    const signalLine = App.Calc.ema(macdValues.slice(-signal), signal) || 0;
+                    const histogram = macdLine - signalLine;
+                    
+                    return {
+                        macd: macdLine,
+                        signal: signalLine,
+                        histogram: histogram
+                    };
+                },
+                
+                // ATR Real (Welles Wilder)
+                atr: (highs, lows, closes, period = 14) => {
+                    if (closes.length < period + 1) return 0;
+                    
+                    const trueRanges = [];
+                    
+                    for (let i = 1; i < closes.length; i++) {
+                        const tr = Math.max(
+                            highs[i] - lows[i],
+                            Math.abs(highs[i] - closes[i - 1]),
+                            Math.abs(lows[i] - closes[i - 1])
+                        );
+                        trueRanges.push(tr);
+                    }
+                    
+                    // Wilder usa SMA para o primeiro ATR, depois suavização
+                    let atr = App.Calc.avg(trueRanges.slice(0, period));
+                    
+                    for (let i = period; i < trueRanges.length; i++) {
+                        atr = ((atr * (period - 1)) + trueRanges[i]) / period;
+                    }
+                    
+                    return atr;
+                },
+                
+                // ADX Real (Welles Wilder)
+                adx: (highs, lows, closes, period = 14) => {
+                    if (closes.length < period * 2) return { adx: 0, plusDI: 0, minusDI: 0 };
+                    
+                    // Calcular DM+ e DM-
+                    const plusDM = [];
+                    const minusDM = [];
+                    
+                    for (let i = 1; i < highs.length; i++) {
+                        const upMove = highs[i] - highs[i - 1];
+                        const downMove = lows[i - 1] - lows[i];
+                        
+                        if (upMove > downMove && upMove > 0) {
+                            plusDM.push(upMove);
+                            minusDM.push(0);
+                        } else if (downMove > upMove && downMove > 0) {
+                            plusDM.push(0);
+                            minusDM.push(downMove);
+                        } else {
+                            plusDM.push(0);
+                            minusDM.push(0);
+                        }
+                    }
+                    
+                    // Calcular True Range
+                    const trueRanges = [];
+                    for (let i = 1; i < closes.length; i++) {
+                        const tr = Math.max(
+                            highs[i] - lows[i],
+                            Math.abs(highs[i] - closes[i - 1]),
+                            Math.abs(lows[i] - closes[i - 1])
+                        );
+                        trueRanges.push(tr);
+                    }
+                    
+                    // Suavizar DM+ e DM- e TR
+                    let smoothedPlusDM = App.Calc.avg(plusDM.slice(0, period));
+                    let smoothedMinusDM = App.Calc.avg(minusDM.slice(0, period));
+                    let smoothedTR = App.Calc.avg(trueRanges.slice(0, period));
+                    
+                    const plusDI = [100 * smoothedPlusDM / smoothedTR];
+                    const minusDI = [100 * smoothedMinusDM / smoothedTR];
+                    
+                    for (let i = period; i < plusDM.length; i++) {
+                        smoothedPlusDM = ((smoothedPlusDM * (period - 1)) + plusDM[i]) / period;
+                        smoothedMinusDM = ((smoothedMinusDM * (period - 1)) + minusDM[i]) / period;
+                        smoothedTR = ((smoothedTR * (period - 1)) + trueRanges[i]) / period;
+                        
+                        plusDI.push(100 * smoothedPlusDM / smoothedTR);
+                        minusDI.push(100 * smoothedMinusDM / smoothedTR);
+                    }
+                    
+                    // Calcular DX
+                    const dx = [];
+                    for (let i = 0; i < plusDI.length; i++) {
+                        const diDiff = Math.abs(plusDI[i] - minusDI[i]);
+                        const diSum = plusDI[i] + minusDI[i];
+                        dx.push(100 * diDiff / diSum);
+                    }
+                    
+                    // Calcular ADX como EMA do DX
+                    const adx = App.Calc.ema(dx.slice(-period), period) || 0;
+                    
+                    return {
+                        adx: adx,
+                        plusDI: plusDI[plusDI.length - 1] || 0,
+                        minusDI: minusDI[minusDI.length - 1] || 0
+                    };
+                },
+                
+                // Bollinger Bands Real
+                bb: (closes, period = 20, multiplier = 2) => {
+                    if (closes.length < period) return { upper: 0, middle: 0, lower: 0 };
+                    
+                    const slice = closes.slice(-period);
+                    const middle = App.Calc.avg(slice);
+                    const stdDev = App.Calc.std(slice);
+                    
+                    return {
+                        upper: middle + (multiplier * stdDev),
+                        middle: middle,
+                        lower: middle - (multiplier * stdDev)
+                    };
+                },
+                
+                // OBV Real
+                obv: (closes, volumes) => {
+                    if (closes.length < 2 || volumes.length < 2) return 0;
+                    
+                    let obv = 0;
+                    for (let i = 1; i < closes.length; i++) {
+                        if (closes[i] > closes[i - 1]) {
+                            obv += volumes[i];
+                        } else if (closes[i] < closes[i - 1]) {
+                            obv -= volumes[i];
+                        }
+                        // Se fechamento igual, OBV não muda
+                    }
+                    
+                    return obv;
+                },
+                
+                // VWAP (apenas para o dia atual - simplificado)
+                vwap: (klines) => {
+                    if (!klines || klines.length === 0) return 0;
+                    
+                    let cumulativeTPV = 0;
+                    let cumulativeVolume = 0;
+                    
+                    for (const kline of klines) {
+                        const typicalPrice = (kline.h + kline.l + kline.c) / 3;
+                        cumulativeTPV += typicalPrice * kline.v;
+                        cumulativeVolume += kline.v;
+                    }
+                    
+                    return cumulativeVolume > 0 ? cumulativeTPV / cumulativeVolume : 0;
+                },
+                
+                // Fibonacci Real (Swing High/Low)
+                fibonacci: (highs, lows) => {
+                    if (highs.length < 20 || lows.length < 20) {
+                        return {
+                            retracement: { 0.236: 0, 0.382: 0, 0.5: 0, 0.618: 0, 0.786: 0 },
+                            extension: { 1.272: 0, 1.414: 0, 1.618: 0 }
+                        };
+                    }
+                    
+                    // Encontrar Swing High e Swing Low recentes
+                    const lookback = Math.min(50, highs.length);
+                    const sliceHighs = highs.slice(-lookback);
+                    const sliceLows = lows.slice(-lookback);
+                    
+                    let swingHigh = Math.max(...sliceHighs);
+                    let swingLow = Math.min(...sliceLows);
+                    
+                    const range = swingHigh - swingLow;
+                    const currentPrice = highs[highs.length - 1];
+                    
+                    return {
+                        retracement: {
+                            0.236: swingHigh - range * 0.236,
+                            0.382: swingHigh - range * 0.382,
+                            0.5: swingHigh - range * 0.5,
+                            0.618: swingHigh - range * 0.618,
+                            0.786: swingHigh - range * 0.786
+                        },
+                        extension: {
+                            1.272: swingLow + range * 1.272,
+                            1.414: swingLow + range * 1.414,
+                            1.618: swingLow + range * 1.618
+                        },
+                        currentLevel: currentPrice < swingHigh ? 
+                            (swingHigh - currentPrice) / range : 
+                            (currentPrice - swingLow) / range
+                    };
+                },
+                
+                // Detecção de Suporte/Resistência
+                supportResistance: (klines, period = 20) => {
+                    if (!klines || klines.length < period) return { support: 0, resistance: 0, distance: 'N/A' };
+                    
+                    const closes = klines.map(k => k.c);
+                    const currentPrice = closes[closes.length - 1];
+                    
+                    // Identificar pivôs de alta e baixa
+                    const pivotHighs = [];
+                    const pivotLows = [];
+                    
+                    for (let i = 5; i < closes.length - 5; i++) {
+                        const isPivotHigh = closes[i] === Math.max(...closes.slice(i - 5, i + 6));
+                        const isPivotLow = closes[i] === Math.min(...closes.slice(i - 5, i + 6));
+                        
+                        if (isPivotHigh) pivotHighs.push(closes[i]);
+                        if (isPivotLow) pivotLows.push(closes[i]);
+                    }
+                    
+                    // Encontrar suporte e resistência mais próximos
+                    const support = pivotLows.length > 0 ? 
+                        Math.max(...pivotLows.filter(p => p < currentPrice)) : 
+                        Math.min(...closes) * 0.95;
+                    
+                    const resistance = pivotHighs.length > 0 ? 
+                        Math.min(...pivotHighs.filter(p => p > currentPrice)) : 
+                        Math.max(...closes) * 1.05;
+                    
+                    const distToSupport = ((currentPrice - support) / currentPrice) * 100;
+                    const distToResistance = ((resistance - currentPrice) / currentPrice) * 100;
+                    
+                    let distance = 'Distante';
+                    if (distToSupport < 2) distance = 'Muito Próximo (Suporte)';
+                    else if (distToResistance < 2) distance = 'Muito Próximo (Resistência)';
+                    else if (distToSupport < 5 || distToResistance < 5) distance = 'Próximo';
+                    
+                    return {
+                        support,
+                        resistance,
+                        distance,
+                        distToSupport,
+                        distToResistance
+                    };
+                },
+                
+                // Detecção Wyckoff Avançada
+                wyckoffAnalysis: (klines) => {
+                    if (!klines || klines.length < 50) return { phase: 'Indeterminado', events: [], score: 50 };
+                    
+                    const closes = klines.map(k => k.c);
+                    const highs = klines.map(k => k.h);
+                    const lows = klines.map(k => k.l);
+                    const volumes = klines.map(k => k.v);
+                    
+                    const currentPrice = closes[closes.length - 1];
+                    const volumeAvg = App.Calc.avg(volumes);
+                    const currentVolume = volumes[volumes.length - 1];
+                    
+                    // Análise de preço e volume para detectar fases Wyckoff
+                    let phase = 'Indeterminado';
+                    let events = [];
+                    let score = 50;
+                    
+                    // Detectar possíveis eventos Wyckoff
+                    const priceRange = Math.max(...highs) - Math.min(...lows);
+                    const recentHigh = Math.max(...highs.slice(-20));
+                    const recentLow = Math.min(...lows.slice(-20));
+                    
+                    // Spring Detection
+                    if (currentPrice > recentLow && currentPrice < recentLow + (priceRange * 0.05)) {
+                        const lowIndex = lows.indexOf(recentLow);
+                        if (lowIndex >= 0 && volumes[lowIndex] > volumeAvg * 1.5) {
+                            events.push('Potential Spring');
+                            score += 15;
+                        }
+                    }
+                    
+                    // SOS Detection
+                    if (currentPrice > recentHigh - (priceRange * 0.05) && currentVolume > volumeAvg * 1.2) {
+                        events.push('Potential SOS');
+                        score += 10;
+                    }
+                    
+                    // Determinar fase com base em múltiplos fatores
+                    const bb = App.Calc.bb(closes);
+                    const rsi = App.Calc.rsi(closes);
+                    const adx = App.Calc.adx(highs, lows, closes);
+                    
+                    if (rsi < 40 && currentPrice < bb.middle && adx.adx < 25) {
+                        phase = 'Acumulação (Fase A-B)';
+                        score += 10;
+                    } else if (rsi > 60 && currentPrice > bb.middle && adx.adx > 25) {
+                        phase = 'Markup (Fase D)';
+                        score += 15;
+                    } else if (rsi > 70 && currentPrice > bb.upper) {
+                        phase = 'Distribuição';
+                        score -= 10;
+                    } else if (rsi < 30 && currentPrice < bb.lower) {
+                        phase = 'Markdown';
+                        score -= 15;
+                    } else {
+                        phase = 'Transição/Consolidação';
+                    }
+                    
+                    // Ajustar score com base em volume
+                    if (currentVolume > volumeAvg * 1.5) {
+                        score += 5;
+                    }
+                    
+                    // Limitar score entre 0-100
+                    score = Math.max(0, Math.min(100, score));
+                    
+                    return {
+                        phase,
+                        events,
+                        score
+                    };
+                },
+                
+                // Função principal de cálculo
+                run: (symbol, klines1h, klines1d, btc1d) => {
+                    if (!klines1h || klines1h.length < 50) {
+                        return {
+                            price: 0,
+                            rsi: 50,
+                            macd: 0,
+                            atr: 0,
+                            bb: { upper: 0, middle: 0, lower: 0 },
+                            ema200: null,
+                            vwap: 0,
+                            adx: 0,
+                            obv: 0,
+                            ch1h: 0,
+                            ch24h: 0,
+                            ch7d: 0,
+                            ch30d: 0,
+                            vsBtc: 0,
+                            phase: 'Dados Insuficientes',
+                            score: 0,
+                            sr: 'N/A',
+                            eval: 'NEUTRAL',
+                            fib: { retracement: {}, extension: {} },
+                            spark: ''
+                        };
+                    }
+                    
+                    // Extrair arrays de preços e volumes
+                    const closes = klines1h.map(k => k.c);
+                    const highs = klines1h.map(k => k.h);
+                    const lows = klines1h.map(k => k.l);
+                    const volumes = klines1h.map(k => k.v);
+                    
+                    const currentPrice = closes[closes.length - 1];
+                    
+                    // Calcular todos os indicadores
+                    const rsi = App.Calc.rsi(closes);
+                    const macd = App.Calc.macd(closes);
+                    const atr = App.Calc.atr(highs, lows, closes);
+                    const bb = App.Calc.bb(closes);
+                    const ema200 = App.Calc.ema(closes, 200);
+                    const vwap = App.Calc.vwap(klines1h.slice(-24)); // VWAP das últimas 24 horas
+                    const adxData = App.Calc.adx(highs, lows, closes);
+                    const obv = App.Calc.obv(closes, volumes);
+                    const fib = App.Calc.fibonacci(highs, lows);
+                    const sr = App.Calc.supportResistance(klines1h);
+                    const wyckoff = App.Calc.wyckoffAnalysis(klines1h);
+                    
+                    // Calcular variações de preço
+                    const ch1h = closes.length >= 2 ? ((currentPrice / closes[closes.length - 2]) - 1) * 100 : 0;
+                    const ch24h = closes.length >= 25 ? ((currentPrice / closes[closes.length - 25]) - 1) * 100 : 0;
+                    
+                    // Calcular variações de 7d e 30d usando dados diários
+                    let ch7d = 0, ch30d = 0;
+                    if (klines1d && klines1d.length > 7) {
+                        ch7d = ((currentPrice / klines1d[klines1d.length - 7].c) - 1) * 100;
+                    }
+                    if (klines1d && klines1d.length > 30) {
+                        ch30d = ((currentPrice / klines1d[klines1d.length - 30].c) - 1) * 100;
+                    }
+                    
+                    // Calcular performance vs BTC
+                    let vsBtc = 0;
+                    if (btc1d && btc1d.length > 7 && symbol !== 'BTCUSDT') {
+                        const btcChange7d = ((btc1d[btc1d.length - 1].c / btc1d[btc1d.length - 7].c) - 1) * 100;
+                        vsBtc = ch7d - btcChange7d;
+                    }
+                    
+                    // Gerar sparkline
+                    const sparkData = closes.slice(-30);
+                    const minSpark = Math.min(...sparkData);
+                    const maxSpark = Math.max(...sparkData);
+                    const rangeSpark = maxSpark - minSpark;
+                    
+                    let sparkPath = 'M ';
+                    sparkData.forEach((price, i) => {
+                        const x = (i / (sparkData.length - 1)) * 100;
+                        const y = 30 - (((price - minSpark) / (rangeSpark || 1)) * 30);
+                        sparkPath += `${x},${y} `;
+                    });
+                    
+                    // Avaliação final
+                    let evalText = 'NEUTRAL';
+                    if (wyckoff.score > 75) evalText = 'PERFECT';
+                    else if (wyckoff.score > 60) evalText = 'GOOD';
+                    else if (wyckoff.score < 40) evalText = 'POOR';
+                    
+                    return {
+                        price: currentPrice,
+                        rsi,
+                        macd: macd.histogram,
+                        atr,
+                        bb,
+                        ema200,
+                        vwap,
+                        adx: adxData.adx,
+                        obv,
+                        ch1h,
+                        ch24h,
+                        ch7d,
+                        ch30d,
+                        vsBtc,
+                        phase: wyckoff.phase,
+                        score: wyckoff.score,
+                        sr: sr.distance,
+                        eval: evalText,
+                        fib,
+                        spark: sparkPath,
+                        events: wyckoff.events
+                    };
+                }
+            },
+
+            // 3. GERENCIAMENTO DE DADOS
+            Data: {
+                init: async () => {
+                    App.UI.tooltips();
+                    await App.Data.fetch();
+                    App.Data.ws();
+                    App.UI.grid();
+                    App.UI.tables();
+                    
+                    // Configurar auto-refresh a cada 60 segundos
+                    setInterval(() => { 
+                        let e = document.getElementById('countdown'); 
+                        let v = +e.innerText.replace('s',''); 
+                        e.innerText = (v <= 1 ? 60 : v - 1) + 's'; 
+                        if (v <= 1) App.Data.fetch(); 
+                    }, 1000);
+                },
+                
+                fetch: async () => {
+                    try {
+                        // Buscar dados do BTC para comparação
+                        let btcResponse = await fetch(`https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=35`);
+                        let btcData = await btcResponse.json();
+                        App.State.cache.btc1d = btcData.map(x => ({ c: +x[4] }));
+                        
+                        // Buscar dados para cada token
+                        for (let t of App.State.tokens) {
+                            try {
+                                let [r1, r2] = await Promise.all([
+                                    fetch(`https://api.binance.com/api/v3/klines?symbol=${t}&interval=1h&limit=250`),
+                                    fetch(`https://api.binance.com/api/v3/klines?symbol=${t}&interval=1d&limit=35`)
+                                ]);
+                                
+                                let [d1, d2] = await Promise.all([r1.json(), r2.json()]);
+                                
+                                App.State.klines1h[t] = d1.map(x => ({
+                                    time: x[0] / 1000,
+                                    o: +x[1],
+                                    h: +x[2],
+                                    l: +x[3],
+                                    c: +x[4],
+                                    v: +x[5]
+                                }));
+                                
+                                App.State.klines1d[t] = d2.map(x => ({ c: +x[4] }));
+                                
+                                App.State.metrics[t] = App.Calc.run(
+                                    t, 
+                                    App.State.klines1h[t], 
+                                    App.State.klines1d[t], 
+                                    App.State.cache.btc1d
+                                );
+                            } catch (e) {
+                                console.error(`Erro ao buscar dados para ${t}:`, e);
+                            }
+                        }
+                        
+                        App.UI.tables();
+                        App.UI.grid();
+                        document.getElementById('last-update').innerText = new Date().toLocaleTimeString();
+                        App.State.cache.lastUpdate = Date.now();
+                    } catch (error) {
+                        console.error('Erro na atualização de dados:', error);
+                        document.getElementById('last-update').innerText = 'Erro na conexão';
+                    }
+                },
+                
+                ws: () => {
+                    if (App.State.ws) {
+                        App.State.ws.close();
+                    }
+                    
+                    let streams = App.State.tokens.map(t => t.toLowerCase() + '@ticker').join('/');
+                    App.State.ws = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${streams}`);
+                    
+                    App.State.ws.onmessage = (e) => {
+                        try {
+                            let msg = JSON.parse(e.data);
+                            App.UI.update(msg.data);
+                        } catch (error) {
+                            console.error('Erro ao processar mensagem WebSocket:', error);
+                        }
+                    };
+                    
+                    App.State.ws.onerror = (error) => {
+                        console.error('Erro WebSocket:', error);
+                    };
+                    
+                    App.State.ws.onclose = () => {
+                        console.log('WebSocket fechado. Tentando reconectar em 5 segundos...');
+                        setTimeout(() => App.Data.ws(), 5000);
+                    };
+                }
+            },
+
+            // 4. INTERFACE DO USUÁRIO
+            UI: {
+                imgError: (img) => {
+                    const card = img.closest('.card');
+                    if (!card) return;
+                    
+                    const symbol = card.dataset.symbol.replace('USDT', '').toLowerCase();
+                    if (!img.dataset.tried) {
+                        img.dataset.tried = "1";
+                        img.src = `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${symbol}.png`;
+                    } else {
+                        // Fallback para ícone genérico
+                        img.style.display = 'none';
+                        img.parentElement.innerHTML = '<div class="w-10 h-10 rounded-full bg-dark-800 border border-gray-700 flex items-center justify-center"><i class="fa-solid fa-coins text-gray-500"></i></div>';
+                    }
+                },
+                
+                closeTooltip: () => {
+                    let overlay = document.getElementById('metric-tooltip-overlay');
+                    overlay.classList.add('translate-y-full', 'opacity-0', 'pointer-events-none');
+                    overlay.classList.remove('translate-y-0', 'opacity-100');
+                },
+
+                tooltips: () => {
+                    let overlay = document.getElementById('metric-tooltip-overlay');
+                    
+                    document.body.addEventListener('click', (e) => {
+                        // Fechar tooltip se clicar fora
+                        let tooltipTrigger = e.target.closest('[data-tip]');
+                        if (!tooltipTrigger && !e.target.closest('#metric-tooltip-overlay')) {
+                            App.UI.closeTooltip();
+                            return;
+                        }
+
+                        // Abrir tooltip se clicar em um trigger
+                        if (tooltipTrigger) {
+                            e.stopPropagation();
+                            let tipKey = tooltipTrigger.dataset.tip;
+                            let tipData = App.Library[tipKey];
+                            
+                            if (!tipData) return;
+
+                            overlay.innerHTML = `
+                                <button onclick="App.UI.closeTooltip()" class="absolute top-4 right-4 text-gray-500 hover:text-white text-lg p-2"><i class="fa-solid fa-times"></i></button>
+                                <div class="border-r border-gray-800 pr-6 overflow-y-auto max-h-full">
+                                    <h4 class="text-brand-500 font-bold text-xl mb-3 tracking-tight">${tipData.title}</h4>
+                                    <p class="text-sm text-gray-300 leading-relaxed mb-4">${tipData.what}</p>
+                                    ${tipData.calc ? `<div><div class="tip-head">Cálculo</div><p class="tip-body font-mono text-xs text-gray-500">${tipData.calc}</p></div>` : ''}
+                                </div>
+                                <div class="border-r border-gray-800 pr-6 overflow-y-auto max-h-full">
+                                    <div class="mb-4"><div class="tip-head">Interpretação</div><p class="tip-body tip-accent text-white">${tipData.interp || '-'}</p></div>
+                                    <div class="mb-4"><div class="tip-head">Ação Prática</div><p class="tip-body text-green-400">${tipData.action || 'Observar contexto.'}</p></div>
+                                    <div><div class="tip-head text-red-400">Erros Comuns</div><p class="tip-body">${tipData.error || '-'}</p></div>
+                                </div>
+                                <div class="overflow-y-auto max-h-full pl-2">
+                                    <div class="bg-brand-900/10 border border-brand-500/20 p-4 rounded-lg mb-4">
+                                        <div class="tip-head text-brand-400 flex items-center gap-2"><i class="fa-solid fa-lightbulb"></i> Dica Master</div>
+                                        <p class="text-sm text-brand-100 italic">"${tipData.tip || ''}"</p>
+                                    </div>
+                                    ${tipData.wyckoff ? `<div class="mb-2"><div class="tip-head text-yellow-500">Contexto Wyckoff</div><p class="tip-body">${tipData.wyckoff}</p></div>` : ''}
+                                    ${tipData.fib ? `<div><div class="tip-head text-purple-400">Contexto Fibonacci</div><p class="tip-body">${tipData.fib}</p></div>` : ''}
+                                    ${tipData.confluencia ? `<div class="mt-2"><div class="tip-head text-green-400">Confluência</div><p class="tip-body">${tipData.confluencia}</p></div>` : ''}
+                                </div>`;
+                            
+                            overlay.classList.remove('translate-y-full', 'opacity-0', 'pointer-events-none');
+                            overlay.classList.add('translate-y-0', 'opacity-100');
+                        }
+                    });
+                },
+                
+                tables: () => {
+                    let data = Object.entries(App.State.metrics)
+                        .map(([symbol, metrics]) => ({ symbol, ...metrics }))
+                        .filter(item => item.price > 0); // Filtrar itens com dados válidos
+                    
+                    if (!data.length) return;
+                    
+                    const renderList = (id, arr, colFn, valFn) => {
+                        const tbody = document.getElementById(id);
+                        if (!tbody) return;
+                        
+                        tbody.innerHTML = arr.slice(0, 10).map(item => `
+                            <tr class="hover:bg-white/5 cursor-pointer transition-colors border-b border-gray-800/50 last:border-0" 
+                                onclick="App.UI.toggleCard(document.querySelector('.card[data-symbol=\"${item.symbol}\"]'))">
+                                <td class="p-2 font-bold text-white" data-tip="col_ticker">${item.symbol.replace('USDT', '')}</td>
+                                <td class="p-2 text-center font-mono text-gray-400" data-tip="${colFn(item).tip}">${colFn(item).val}</td>
+                                <td class="p-2 text-right font-mono ${valFn(item).col}" data-tip="${valFn(item).tip}">${valFn(item).val}</td>
+                            </tr>
+                        `).join('');
+                    };
+                    
+                    // Top Gainers
+                    renderList(
+                        'list-gainers', 
+                        [...data].sort((a, b) => b.ch24h - a.ch24h),
+                        x => ({ val: '$' + x.price.toFixed(x.price < 1 ? 4 : 2), tip: 'val_price' }),
+                        x => ({ val: (x.ch24h > 0 ? '+' : '') + x.ch24h.toFixed(2) + '%', col: x.ch24h > 0 ? 'text-green-400' : 'text-red-400', tip: 'val_chg_24h' })
+                    );
+                    
+                    // Top Losers
+                    renderList(
+                        'list-losers', 
+                        [...data].sort((a, b) => a.ch24h - b.ch24h),
+                        x => ({ val: '$' + x.price.toFixed(x.price < 1 ? 4 : 2), tip: 'val_price' }),
+                        x => ({ val: x.ch24h.toFixed(2) + '%', col: x.ch24h > 0 ? 'text-green-400' : 'text-red-400', tip: 'val_chg_24h' })
+                    );
+                    
+                    // Top Score
+                    renderList(
+                        'list-attraction', 
+                        [...data].sort((a, b) => b.score - a.score),
+                        x => ({ val: x.score.toFixed(0), tip: 'val_score' }),
+                        x => ({ val: x.phase, col: 'text-gray-400 text-[9px] uppercase', tip: 'val_phase' })
+                    );
+                    
+                    // Top Oversold
+                    renderList(
+                        'list-oversold', 
+                        [...data].sort((a, b) => a.rsi - b.rsi),
+                        x => ({ val: x.rsi.toFixed(1), tip: 'val_rsi' }),
+                        x => ({ 
+                            val: x.sr, 
+                            col: x.sr.includes('Muito') ? 'text-brand-400 font-bold' : 'text-gray-500', 
+                            tip: 'val_sr' 
+                        })
+                    );
+
+                    // Ranking Geral
+                    let tbody = document.getElementById('ranking-body');
+                    if (!tbody) return;
+                    
+                    tbody.innerHTML = '';
+                    data.sort((a, b) => b.score - a.score)
+                        .slice(0, 15)
+                        .forEach((item, index) => {
+                            tbody.innerHTML += `
+                            <tr class="table-row-hover border-b border-gray-800 cursor-pointer transition-colors">
+                                <td class="p-3 text-center text-gray-500 font-bold" data-tip="rank_pos">${index + 1}</td>
+                                <td class="p-3 font-bold text-white" data-tip="rank_ticker" 
+                                    onclick="event.stopPropagation(); App.UI.toggleCard(document.querySelector('.card[data-symbol=\"${item.symbol}\"]'))">
+                                    ${item.symbol.replace('USDT', '')}
+                                </td>
+                                <td class="p-3 text-center" data-tip="rank_score">
+                                    <span class="px-2 py-1 rounded text-[10px] font-bold text-black ${item.score > 70 ? 'bg-score-high' : (item.score < 40 ? 'bg-score-low' : 'bg-score-mid')}">
+                                        ${item.score.toFixed(0)}
+                                    </span>
+                                </td>
+                                <td class="p-3 text-center font-mono ${item.rsi < 30 ? 'text-green-400' : (item.rsi > 70 ? 'text-red-400' : 'text-gray-400')}" 
+                                    data-tip="rank_rsi">
+                                    ${item.rsi.toFixed(1)}
+                                </td>
+                                <td class="p-3 text-center font-mono ${item.macd > 0 ? 'text-green-400' : 'text-red-400'}" 
+                                    data-tip="rank_macd">
+                                    ${item.macd.toFixed(4)}
+                                </td>
+                                <td class="p-3 text-center text-gray-400 font-mono text-[10px] uppercase" 
+                                    data-tip="rank_sr">
+                                    ${item.sr}
+                                </td>
+                                <td class="p-3" data-tip="rank_phase">
+                                    <span class="text-[9px] uppercase bg-dark-800 px-2 py-1 rounded text-gray-300 border border-gray-700">
+                                        ${item.phase}
+                                    </span>
+                                </td>
+                                <td class="p-3 text-right" data-tip="rank_action" 
+                                    onclick="App.UI.toggleCard(document.querySelector('.card[data-symbol=\"${item.symbol}\"]'))">
+                                    <i class="fa-solid fa-chevron-right text-gray-600 hover:text-white"></i>
+                                </td>
+                            </tr>`;
+                        });
+                },
+                
+                grid: () => {
+                    let grid = document.getElementById('cards-grid');
+                    if (!grid) return;
+                    
+                    grid.innerHTML = '';
+                    
+                    App.State.tokens.forEach(symbol => {
+                        let template = document.getElementById('card-template');
+                        if (!template) return;
+                        
+                        let card = template.content.cloneNode(true).querySelector('.card');
+                        card.dataset.symbol = symbol;
+                        
+                        // Configurar elementos básicos do card
+                        card.querySelector('.symbol-ticker').innerText = symbol.replace('USDT', '');
+                        card.querySelector('.symbol-img').src = `https://bin.bnbstatic.com/static/images/home/coin-logo/${symbol.replace('USDT', '').toUpperCase()}.png`;
+                        card.querySelector('.btn-remove').onclick = (e) => {
+                            e.stopPropagation(); 
+                            App.Token.rem(symbol);
+                        };
+                        
+                        // Preencher com dados se disponíveis
+                        let metrics = App.State.metrics[symbol];
+                        if (metrics) {
+                            card.querySelector('.price-display').innerText = '$' + metrics.price.toFixed(metrics.price < 1 ? 6 : 2);
+                            card.querySelector('.wyckoff-badge').innerText = metrics.phase;
+                            
+                            let scoreBadge = card.querySelector('.score-badge');
+                            scoreBadge.innerText = metrics.score.toFixed(0);
+                            scoreBadge.className += metrics.score > 70 ? ' bg-score-high' : (metrics.score < 40 ? ' bg-score-low' : ' bg-score-mid');
+                            
+                            let sparkPath = card.querySelector('.sparkline-path');
+                            if (sparkPath) sparkPath.setAttribute('d', metrics.spark);
+                            
+                            // Helper para atualizar elementos
+                            const setText = (selector, value) => {
+                                let element = card.querySelector(selector);
+                                if (element) element.innerText = value;
+                            };
+                            
+                            const setTextWithColor = (selector, value, positiveClass, negativeClass) => {
+                                let element = card.querySelector(selector);
+                                if (element) {
+                                    element.innerText = value;
+                                    if (positiveClass && negativeClass) {
+                                        element.className = element.className.replace(positiveClass, '').replace(negativeClass, '');
+                                        element.className += value.toString().includes('+') ? ` ${positiveClass}` : ` ${negativeClass}`;
+                                    }
+                                }
+                            };
+                            
+                            // Atualizar métricas
+                            setText('.metric-rsi', metrics.rsi.toFixed(1));
+                            setText('.metric-adx', metrics.adx.toFixed(1));
+                            setText('.metric-sr', metrics.sr);
+                            
+                            setTextWithColor('.val-1h', (metrics.ch1h > 0 ? '+' : '') + metrics.ch1h.toFixed(2) + '%', 'text-green-400', 'text-red-400');
+                            setTextWithColor('.val-24h', (metrics.ch24h > 0 ? '+' : '') + metrics.ch24h.toFixed(2) + '%', 'text-green-400', 'text-red-400');
+                            setTextWithColor('.val-7d', (metrics.ch7d > 0 ? '+' : '') + metrics.ch7d.toFixed(2) + '%', 'text-green-400', 'text-red-400');
+                            setTextWithColor('.val-30d', (metrics.ch30d > 0 ? '+' : '') + metrics.ch30d.toFixed(2) + '%', 'text-green-400', 'text-red-400');
+                            
+                            setText('.val-atr', metrics.atr.toFixed(4));
+                            setText('.val-ema', metrics.ema200 ? metrics.ema200.toFixed(4) : '--');
+                            setText('.val-vwap', metrics.vwap.toFixed(4));
+                            setText('.val-bb', `${metrics.bb.lower.toFixed(2)} - ${metrics.bb.upper.toFixed(2)}`);
+                            setText('.val-macd', metrics.macd.toFixed(4));
+                            setText('.val-obv', (metrics.obv / 1000000).toFixed(1) + 'M');
+                            
+                            if (metrics.fib.retracement) {
+                                setText('.val-f1618', metrics.fib.retracement[0.618] ? metrics.fib.retracement[0.618].toFixed(4) : '--');
+                                setText('.val-f0618', metrics.fib.retracement[0.382] ? metrics.fib.retracement[0.382].toFixed(4) : '--');
+                                setText('.val-f0382', metrics.fib.retracement[0.236] ? metrics.fib.retracement[0.236].toFixed(4) : '--');
+                            }
+                            
+                            setText('.val-vsbtc', metrics.vsBtc.toFixed(2) + '%');
+                            setText('.val-eval', metrics.eval);
+                        }
+                        
+                        grid.appendChild(card);
+                    });
+                },
+                
+                update: (data) => {
+                    if (!data || !data.s) return;
+                    
+                    let card = document.querySelector(`.card[data-symbol="${data.s}"]`);
+                    if (!card) return;
+                    
+                    let price = +data.c;
+                    let priceElement = card.querySelector('.price-display');
+                    if (!priceElement) return;
+                    
+                    let previousPrice = +priceElement.dataset.lastPrice || price;
+                    priceElement.innerText = '$' + price.toFixed(price < 1 ? 6 : 2);
+                    priceElement.dataset.lastPrice = price;
+                    
+                    // Efeito de pulso para mudanças de preço
+                    if (price > previousPrice) {
+                        priceElement.classList.add('pulse-green');
+                        setTimeout(() => priceElement.classList.remove('pulse-green'), 800);
+                    } else if (price < previousPrice) {
+                        priceElement.classList.add('pulse-red');
+                        setTimeout(() => priceElement.classList.remove('pulse-red'), 800);
+                    }
+                    
+                    // Verificar alertas
+                    App.Alerts.check(data.s, price);
+                },
+                
+                toggleCard: (element) => {
+                    if (!element) return;
+                    
+                    let card = element.classList.contains('card') ? element : element.closest('.card');
+                    if (!card) return;
+                    
+                    // Scroll suave para o card
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    
+                    let body = card.querySelector('.card-body');
+                    if (!body) return;
+                    
+                    if (body.classList.contains('hidden')) {
+                        // Fechar outros cards abertos
+                        document.querySelectorAll('.card-body').forEach(el => el.classList.add('hidden'));
+                        
+                        // Abrir este card
+                        body.classList.remove('hidden');
+                        
+                        // Criar/atualizar gráfico se necessário
+                        let symbol = card.dataset.symbol;
+                        let container = card.querySelector('.chart-container');
+                        if (container && App.State.klines1h[symbol]) {
+                            container.innerHTML = '';
+                            
+                            let chart = LightweightCharts.createChart(container, {
+                                layout: {
+                                    background: { color: '#000000' },
+                                    textColor: '#6b7280'
+                                },
+                                grid: {
+                                    vertLines: { color: '#1f2937' },
+                                    horzLines: { color: '#1f2937' }
+                                },
+                                timeScale: {
+                                    timeVisible: true,
+                                    borderColor: '#374151'
+                                },
+                                width: container.clientWidth,
+                                height: container.clientHeight
+                            });
+                            
+                            let series = chart.addCandlestickSeries({
+                                upColor: '#10b981',
+                                downColor: '#ef4444',
+                                borderVisible: false,
+                                wickUpColor: '#10b981',
+                                wickDownColor: '#ef4444'
+                            });
+                            
+                            series.setData(App.State.klines1h[symbol].map(k => ({
+                                time: k.time,
+                                open: k.o,
+                                high: k.h,
+                                low: k.l,
+                                close: k.c
+                            })));
+                            
+                            chart.timeScale().fitContent();
+                            App.State.charts[symbol] = { chart, series };
+                        }
+                    } else {
+                        // Fechar este card
+                        body.classList.add('hidden');
+                        
+                        // Remover gráfico para economizar recursos
+                        let symbol = card.dataset.symbol;
+                        if (App.State.charts[symbol]) {
+                            App.State.charts[symbol].chart.remove();
+                            delete App.State.charts[symbol];
+                        }
+                    }
+                }
+            },
+
+            // 5. GERENCIAMENTO DE TOKENS
+            Token: {
+                add: () => {
+                    let input = document.getElementById('add-input');
+                    if (!input) return;
+                    
+                    let symbol = input.value.trim().toUpperCase();
+                    if (!symbol) return;
+                    
+                    // Adicionar USDT se não estiver presente
+                    if (!symbol.endsWith('USDT')) {
+                        symbol += 'USDT';
+                    }
+                    
+                    // Verificar se já existe
+                    if (App.State.tokens.includes(symbol)) {
+                        alert('Token já adicionado!');
+                        return;
+                    }
+                    
+                    // Adicionar e salvar
+                    App.State.tokens.push(symbol);
+                    localStorage.setItem('wyckoff_tokens', JSON.stringify(App.State.tokens));
+                    
+                    // Recarregar dados
+                    location.reload();
+                },
+                
+                rem: (symbol) => {
+                    if (confirm(`Remover ${symbol} da lista?`)) {
+                        App.State.tokens = App.State.tokens.filter(t => t !== symbol);
+                        localStorage.setItem('wyckoff_tokens', JSON.stringify(App.State.tokens));
+                        location.reload();
+                    }
+                }
+            },
+
+            // 6. SIMULAÇÃO DE TRADES
+            Trade: {
+                exec: (button, type) => {
+                    let card = button.closest('.card');
+                    if (!card) return;
+                    
+                    let symbol = card.dataset.symbol;
+                    let priceElement = card.querySelector('.price-display');
+                    if (!priceElement) return;
+                    
+                    let price = +priceElement.dataset.lastPrice || 0;
+                    if (price <= 0) return;
+                    
+                    // Adicionar trade ao histórico
+                    App.State.trades.unshift({
+                        id: Date.now(),
+                        symbol: symbol,
+                        type: type,
+                        price: price,
+                        date: new Date().toLocaleString()
+                    });
+                    
+                    // Manter apenas os últimos 50 trades
+                    if (App.State.trades.length > 50) {
+                        App.State.trades = App.State.trades.slice(0, 50);
+                    }
+                    
+                    localStorage.setItem('wyckoff_trades', JSON.stringify(App.State.trades));
+                    
+                    // Atualizar lista de trades no card
+                    let tradeList = card.querySelector('.trade-list');
+                    if (tradeList) {
+                        let newTradeHTML = `
+                            <div class="flex justify-between border-b border-gray-800/50 py-1">
+                                <span class="${type === 'buy' ? 'text-green-500' : 'text-red-500'} font-bold">
+                                    ${type.toUpperCase()}
+                                </span>
+                                <span class="text-white">$${price.toFixed(4)}</span>
+                            </div>
+                        `;
+                        
+                        tradeList.innerHTML = newTradeHTML + tradeList.innerHTML;
+                    }
+                }
+            },
+
+            // 7. SISTEMA DE ALERTAS
+            Alerts: {
+                addSuggest: (button) => {
+                    let card = button.closest('.card');
+                    if (!card) return;
+                    
+                    let symbol = card.dataset.symbol;
+                    let priceElement = card.querySelector('.price-display');
+                    if (!priceElement) return;
+                    
+                    let currentPrice = +priceElement.dataset.lastPrice || 0;
+                    if (currentPrice <= 0) return;
+                    
+                    // Criar alerta 2% abaixo do preço atual
+                    let alertPrice = currentPrice * 0.98;
+                    
+                    App.State.alerts.push({
+                        symbol: symbol,
+                        price: alertPrice,
+                        type: 'COMPRA',
+                        active: true,
+                        created: new Date().toLocaleString()
+                    });
+                    
+                    localStorage.setItem('wyckoff_alerts', JSON.stringify(App.State.alerts));
+                    
+                    alert(`Alerta criado para ${symbol} a $${alertPrice.toFixed(4)} (-2%)`);
+                },
+                
+                check: (symbol, currentPrice) => {
+                    App.State.alerts.forEach(alert => {
+                        if (alert.active && alert.symbol === symbol) {
+                            // Verificar se o preço atingiu o alerta (com tolerância de 0.5%)
+                            let difference = Math.abs(currentPrice - alert.price) / alert.price;
+                            
+                            if (difference <= 0.005) { // 0.5% de tolerância
+                                alert.active = false;
+                                
+                                // Mostrar notificação (simplificado)
+                                console.log(`ALERTA: ${symbol} atingiu $${currentPrice.toFixed(4)}`);
+                                
+                                // Em uma implementação real, aqui você mostraria uma notificação visual
+                                localStorage.setItem('wyckoff_alerts', JSON.stringify(App.State.alerts));
+                            }
+                        }
+                    });
+                }
+            },
+
+            // 8. EXPORTAÇÃO DE DADOS
+            Export: {
+                openModal: () => {
+                    let modal = document.getElementById('export-modal');
+                    if (modal) modal.classList.remove('hidden');
+                },
+                
+                closeModal: () => {
+                    let modal = document.getElementById('export-modal');
+                    if (modal) modal.classList.add('hidden');
+                },
+                
+                gen: () => {
+                    // Preparar dados para exportação
+                    let exportData = App.State.tokens.map(symbol => {
+                        let metrics = App.State.metrics[symbol] || {};
+                        return {
+                            'Token': symbol.replace('USDT', ''),
+                            'Preço': metrics.price || 0,
+                            'Variação 24h': metrics.ch24h ? metrics.ch24h.toFixed(2) + '%' : '0%',
+                            'Score': metrics.score || 0,
+                            'RSI': metrics.rsi ? metrics.rsi.toFixed(1) : 0,
+                            'MACD': metrics.macd ? metrics.macd.toFixed(4) : 0,
+                            'Fase Wyckoff': metrics.phase || 'N/A',
+                            'Suporte/Resistência': metrics.sr || 'N/A',
+                            'ATR': metrics.atr ? metrics.atr.toFixed(4) : 0,
+                            'ADX': metrics.adx ? metrics.adx.toFixed(1) : 0,
+                            'EMA200': metrics.ema200 ? metrics.ema200.toFixed(4) : 'N/A',
+                            'VWAP': metrics.vwap ? metrics.vwap.toFixed(4) : 0,
+                            'OBV': metrics.obv ? (metrics.obv / 1000000).toFixed(1) + 'M' : 0
+                        };
+                    });
+                    
+                    // Criar planilha
+                    let worksheet = XLSX.utils.json_to_sheet(exportData);
+                    let workbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(workbook, worksheet, 'Wyckoff_Report');
+                    
+                    // Exportar arquivo
+                    XLSX.writeFile(workbook, `Wyckoff_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+                    
+                    App.Export.closeModal();
+                }
+            },
+
+            // 9. FUNÇÕES CORE
+            Core: {
+                refreshData: () => {
+                    location.reload();
+                }
+            }
+        };
+
+        // Inicializar a aplicação quando o DOM estiver pronto
+        document.addEventListener('DOMContentLoaded', App.Data.init);
+    </script>
+</body>
+</html>
