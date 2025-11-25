@@ -1217,9 +1217,16 @@
                     score += volumeScore;
                     
                     // DETECÇÃO DE EVENTOS WYCKOFF COM CONFIRMAÇÃO POR VOLUME
-                    // Spring Detection (aprimorado)
-                    const prevLow = Math.min(...lows.slice(-25, -5));
+                    // Cache de slices para evitar recálculos
+                    const last25to5Lows = lows.slice(-25, -5);
+                    const last25to5Highs = highs.slice(-25, -5);
                     const lastFiveLows = lows.slice(-5);
+                    const lastFiveHighs = highs.slice(-5);
+                    const lastFiveVolumes = volumes.slice(-5);
+                    const lastFiveVolumeAvg = App.Calc.avg(lastFiveVolumes);
+                    
+                    // Spring Detection (aprimorado)
+                    const prevLow = last25to5Lows.length > 0 ? Math.min(...last25to5Lows) : recentLow;
                     const springCandidate = Math.min(...lastFiveLows);
                     
                     if (springCandidate < prevLow) {
@@ -1239,16 +1246,14 @@
                     }
                     
                     // SOS Detection (aprimorado)
-                    const prevHigh = Math.max(...highs.slice(-25, -5));
-                    const lastFiveHighs = highs.slice(-5);
+                    const prevHigh = last25to5Highs.length > 0 ? Math.max(...last25to5Highs) : recentHigh;
                     const sosCandidate = Math.max(...lastFiveHighs);
                     
                     if (sosCandidate > prevHigh) {
                         // Houve rompimento da resistência
-                        const recentVolumeAvg = App.Calc.avg(volumes.slice(-5));
                         const priceHolding = currentPrice > prevHigh * 0.98;
                         
-                        if (priceHolding && recentVolumeAvg > volumeAvg * 1.2) {
+                        if (priceHolding && lastFiveVolumeAvg > volumeAvg * 1.2) {
                             // SOS com volume crescente e preço segurando = sinal forte
                             events.push('SOS Confirmado');
                             score += 10;
@@ -1337,7 +1342,7 @@
                     
                     // Calcular variações de preço
                     const ch1h = closes.length >= 2 ? ((currentPrice / closes[closes.length - 2]) - 1) * 100 : 0;
-                    const ch24h = closes.length >= 24 ? ((currentPrice / closes[closes.length - 24]) - 1) * 100 : 0;
+                    const ch24h = closes.length >= 25 ? ((currentPrice / closes[closes.length - 25]) - 1) * 100 : 0;
                     
                     // Calcular variações de 7d e 30d usando dados diários
                     let ch7d = 0, ch30d = 0;
