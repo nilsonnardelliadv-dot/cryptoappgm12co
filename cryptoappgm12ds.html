@@ -738,26 +738,44 @@
                     return 100 - (100 / (1 + rs));
                 },
                 
-                // MACD Real
+                // MACD Otimizado com cálculo incremental de EMA
                 macd: (closes, fast = 12, slow = 26, signal = 9) => {
-                    if (closes.length < slow) return { macd: 0, signal: 0, histogram: 0 };
+                    if (closes.length < slow + signal) return { macd: 0, signal: 0, histogram: 0 };
                     
-                    const emaFast = App.Calc.ema(closes, fast);
-                    const emaSlow = App.Calc.ema(closes, slow);
-                    const macdLine = emaFast - emaSlow;
+                    // Calcular EMA incremental para fast e slow
+                    const fastMultiplier = 2 / (fast + 1);
+                    const slowMultiplier = 2 / (slow + 1);
+                    const signalMultiplier = 2 / (signal + 1);
                     
-                    // Para calcular a linha de sinal, precisamos de valores MACD históricos
-                    // Como simplificação, usaremos os últimos 'signal' períodos de closes para aproximar
+                    // Inicializar EMAs com SMA
+                    let emaFast = App.Calc.avg(closes.slice(0, fast));
+                    let emaSlow = App.Calc.avg(closes.slice(0, slow));
+                    
+                    // Array para armazenar valores MACD históricos
                     const macdValues = [];
-                    for (let i = slow; i < closes.length; i++) {
-                        const fastEma = App.Calc.ema(closes.slice(0, i + 1), fast);
-                        const slowEma = App.Calc.ema(closes.slice(0, i + 1), slow);
-                        if (fastEma !== null && slowEma !== null) {
-                            macdValues.push(fastEma - slowEma);
+                    
+                    // Calcular EMAs incrementalmente
+                    for (let i = 0; i < closes.length; i++) {
+                        if (i >= fast) {
+                            emaFast = (closes[i] * fastMultiplier) + (emaFast * (1 - fastMultiplier));
+                        }
+                        if (i >= slow) {
+                            emaSlow = (closes[i] * slowMultiplier) + (emaSlow * (1 - slowMultiplier));
+                            macdValues.push(emaFast - emaSlow);
                         }
                     }
                     
-                    const signalLine = App.Calc.ema(macdValues.slice(-signal), signal) || 0;
+                    if (macdValues.length < signal) {
+                        return { macd: 0, signal: 0, histogram: 0 };
+                    }
+                    
+                    // Calcular linha de sinal como EMA incremental dos valores MACD
+                    let signalLine = App.Calc.avg(macdValues.slice(0, signal));
+                    for (let i = signal; i < macdValues.length; i++) {
+                        signalLine = (macdValues[i] * signalMultiplier) + (signalLine * (1 - signalMultiplier));
+                    }
+                    
+                    const macdLine = macdValues[macdValues.length - 1];
                     const histogram = macdLine - signalLine;
                     
                     return {
@@ -894,14 +912,57 @@
                     return obv;
                 },
                 
-                // VWAP (apenas para o dia atual - simplificado)
+                // OBV Variação Percentual (normalizado para escala interpretável)
+                obvChange: (closes, volumes) => {
+                    if (closes.length < 25 || volumes.length < 25) return 0;
+                    
+                    // Calcular OBV para as últimas 24 horas e período anterior
+                    let obvCurrent = 0;
+                    let obv24hAgo = 0;
+                    
+                    // OBV até 24h atrás
+                    for (let i = 1; i < closes.length - 24; i++) {
+                        if (closes[i] > closes[i - 1]) {
+                            obv24hAgo += volumes[i];
+                        } else if (closes[i] < closes[i - 1]) {
+                            obv24hAgo -= volumes[i];
+                        }
+                    }
+                    
+                    // OBV completo (atual)
+                    obvCurrent = obv24hAgo;
+                    for (let i = closes.length - 24; i < closes.length; i++) {
+                        if (closes[i] > closes[i - 1]) {
+                            obvCurrent += volumes[i];
+                        } else if (closes[i] < closes[i - 1]) {
+                            obvCurrent -= volumes[i];
+                        }
+                    }
+                    
+                    // Calcular variação percentual
+                    if (obv24hAgo === 0) return 0;
+                    return ((obvCurrent - obv24hAgo) / Math.abs(obv24hAgo)) * 100;
+                },
+                
+                // VWAP com reset à meia-noite UTC
                 vwap: (klines) => {
                     if (!klines || klines.length === 0) return 0;
+                    
+                    // Encontrar o início do dia UTC atual
+                    const now = new Date();
+                    const todayMidnightUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+                    const todayMidnightTimestamp = todayMidnightUTC.getTime() / 1000;
+                    
+                    // Filtrar apenas klines do dia atual (após meia-noite UTC)
+                    const todayKlines = klines.filter(k => k.time >= todayMidnightTimestamp);
+                    
+                    // Se não houver dados do dia atual, usar últimas 24 horas como fallback
+                    const klinesForVwap = todayKlines.length > 0 ? todayKlines : klines.slice(-24);
                     
                     let cumulativeTPV = 0;
                     let cumulativeVolume = 0;
                     
-                    for (const kline of klines) {
+                    for (const kline of klinesForVwap) {
                         const typicalPrice = (kline.h + kline.l + kline.c) / 3;
                         cumulativeTPV += typicalPrice * kline.v;
                         cumulativeVolume += kline.v;
@@ -910,12 +971,13 @@
                     return cumulativeVolume > 0 ? cumulativeTPV / cumulativeVolume : 0;
                 },
                 
-                // Fibonacci Real (Swing High/Low)
-                fibonacci: (highs, lows) => {
+                // Fibonacci Real (Swing High/Low) - Detecta tendência automaticamente
+                fibonacci: (highs, lows, closes) => {
                     if (highs.length < 20 || lows.length < 20) {
                         return {
                             retracement: { 0.236: 0, 0.382: 0, 0.5: 0, 0.618: 0, 0.786: 0 },
-                            extension: { 1.272: 0, 1.414: 0, 1.618: 0 }
+                            extension: { 1.272: 0, 1.414: 0, 1.618: 0 },
+                            trend: 'neutral'
                         };
                     }
                     
@@ -923,46 +985,83 @@
                     const lookback = Math.min(50, highs.length);
                     const sliceHighs = highs.slice(-lookback);
                     const sliceLows = lows.slice(-lookback);
+                    const sliceCloses = closes ? closes.slice(-lookback) : sliceHighs;
                     
-                    let swingHigh = Math.max(...sliceHighs);
-                    let swingLow = Math.min(...sliceLows);
-                    
+                    const swingHigh = Math.max(...sliceHighs);
+                    const swingLow = Math.min(...sliceLows);
                     const range = swingHigh - swingLow;
-                    const currentPrice = highs[highs.length - 1];
+                    const currentPrice = sliceCloses[sliceCloses.length - 1];
                     
-                    return {
-                        retracement: {
-                            0.236: swingHigh - range * 0.236,
-                            0.382: swingHigh - range * 0.382,
-                            0.5: swingHigh - range * 0.5,
-                            0.618: swingHigh - range * 0.618,
-                            0.786: swingHigh - range * 0.786
-                        },
-                        extension: {
+                    // Detectar tendência: comparar primeira metade com segunda metade do período
+                    const midpoint = Math.floor(lookback / 2);
+                    const firstHalfAvg = App.Calc.avg(sliceCloses.slice(0, midpoint));
+                    const secondHalfAvg = App.Calc.avg(sliceCloses.slice(midpoint));
+                    const isUptrend = secondHalfAvg > firstHalfAvg;
+                    
+                    let retracement = {};
+                    let extension = {};
+                    
+                    if (isUptrend) {
+                        // Tendência de alta: retrações a partir do swingLow subindo
+                        // Níveis de suporte onde o preço pode encontrar demanda
+                        retracement = {
+                            0.236: swingLow + range * (1 - 0.236), // Retração rasa
+                            0.382: swingLow + range * (1 - 0.382),
+                            0.5: swingLow + range * 0.5,
+                            0.618: swingLow + range * (1 - 0.618), // Golden ratio
+                            0.786: swingLow + range * (1 - 0.786)  // Retração profunda
+                        };
+                        // Extensões para alvos de preço acima do swing high
+                        extension = {
                             1.272: swingLow + range * 1.272,
                             1.414: swingLow + range * 1.414,
                             1.618: swingLow + range * 1.618
-                        },
-                        currentLevel: currentPrice < swingHigh ? 
-                            (swingHigh - currentPrice) / range : 
-                            (currentPrice - swingLow) / range
+                        };
+                    } else {
+                        // Tendência de baixa: retrações a partir do swingHigh descendo
+                        // Níveis de resistência onde o preço pode encontrar oferta
+                        retracement = {
+                            0.236: swingHigh - range * (1 - 0.236),
+                            0.382: swingHigh - range * (1 - 0.382),
+                            0.5: swingHigh - range * 0.5,
+                            0.618: swingHigh - range * (1 - 0.618),
+                            0.786: swingHigh - range * (1 - 0.786)
+                        };
+                        // Extensões para alvos de preço abaixo do swing low
+                        extension = {
+                            1.272: swingHigh - range * 1.272,
+                            1.414: swingHigh - range * 1.414,
+                            1.618: swingHigh - range * 1.618
+                        };
+                    }
+                    
+                    return {
+                        retracement,
+                        extension,
+                        trend: isUptrend ? 'up' : 'down',
+                        swingHigh,
+                        swingLow,
+                        currentLevel: isUptrend ? 
+                            (currentPrice - swingLow) / range : 
+                            (swingHigh - currentPrice) / range
                     };
                 },
                 
-                // Detecção de Suporte/Resistência
+                // Detecção de Suporte/Resistência com janela aumentada para 10 períodos
                 supportResistance: (klines, period = 20) => {
                     if (!klines || klines.length < period) return { support: 0, resistance: 0, distance: 'N/A' };
                     
                     const closes = klines.map(k => k.c);
                     const currentPrice = closes[closes.length - 1];
                     
-                    // Identificar pivôs de alta e baixa
+                    // Identificar pivôs de alta e baixa com janela de 10 períodos
+                    const pivotWindow = 10;
                     const pivotHighs = [];
                     const pivotLows = [];
                     
-                    for (let i = 5; i < closes.length - 5; i++) {
-                        const isPivotHigh = closes[i] === Math.max(...closes.slice(i - 5, i + 6));
-                        const isPivotLow = closes[i] === Math.min(...closes.slice(i - 5, i + 6));
+                    for (let i = pivotWindow; i < closes.length - pivotWindow; i++) {
+                        const isPivotHigh = closes[i] === Math.max(...closes.slice(i - pivotWindow, i + pivotWindow + 1));
+                        const isPivotLow = closes[i] === Math.min(...closes.slice(i - pivotWindow, i + pivotWindow + 1));
                         
                         if (isPivotHigh) pivotHighs.push(closes[i]);
                         if (isPivotLow) pivotLows.push(closes[i]);
@@ -994,8 +1093,14 @@
                     };
                 },
                 
-                // Detecção Wyckoff Avançada
-                wyckoffAnalysis: (klines) => {
+                // Detecção Wyckoff Avançada com Score Documentado
+                // Metodologia de Score:
+                // - RSI (peso 20%): 0-30 = +20pts, 30-50 = +10pts, 50-70 = 0pts, 70-100 = -10pts
+                // - Tendência/EMA (peso 25%): Acima EMA200 = +25pts, Abaixo = 0pts
+                // - Fase Wyckoff (peso 30%): Acumulação = +30pts, Markup = +25pts, Distribuição = -10pts, Markdown = -20pts
+                // - Suporte/Resistência (peso 15%): Próximo suporte = +15pts
+                // - Volume (peso 10%): Acima da média = +10pts
+                wyckoffAnalysis: (klines, ema200 = null) => {
                     if (!klines || klines.length < 50) return { phase: 'Indeterminado', events: [], score: 50 };
                     
                     const closes = klines.map(k => k.c);
@@ -1006,65 +1111,175 @@
                     const currentPrice = closes[closes.length - 1];
                     const volumeAvg = App.Calc.avg(volumes);
                     const currentVolume = volumes[volumes.length - 1];
+                    const recentVolumes = volumes.slice(-5);
+                    const recentAvgVolume = App.Calc.avg(recentVolumes);
                     
                     // Análise de preço e volume para detectar fases Wyckoff
                     let phase = 'Indeterminado';
                     let events = [];
-                    let score = 50;
+                    let score = 0;
                     
-                    // Detectar possíveis eventos Wyckoff
-                    const priceRange = Math.max(...highs) - Math.min(...lows);
-                    const recentHigh = Math.max(...highs.slice(-20));
-                    const recentLow = Math.min(...lows.slice(-20));
-                    
-                    // Spring Detection
-                    if (currentPrice > recentLow && currentPrice < recentLow + (priceRange * 0.05)) {
-                        const lowIndex = lows.indexOf(recentLow);
-                        if (lowIndex >= 0 && volumes[lowIndex] > volumeAvg * 1.5) {
-                            events.push('Potential Spring');
-                            score += 15;
-                        }
-                    }
-                    
-                    // SOS Detection
-                    if (currentPrice > recentHigh - (priceRange * 0.05) && currentVolume > volumeAvg * 1.2) {
-                        events.push('Potential SOS');
-                        score += 10;
-                    }
-                    
-                    // Determinar fase com base em múltiplos fatores
+                    // Calcular indicadores necessários
                     const bb = App.Calc.bb(closes);
                     const rsi = App.Calc.rsi(closes);
                     const adx = App.Calc.adx(highs, lows, closes);
                     
+                    // 1. COMPONENTE RSI (20% do score - max 20 pontos)
+                    let rsiScore = 0;
+                    if (rsi <= 30) {
+                        rsiScore = 20; // Sobrevenda = máxima oportunidade
+                    } else if (rsi <= 50) {
+                        rsiScore = 10; // Zona neutra inferior = boa oportunidade
+                    } else if (rsi <= 70) {
+                        rsiScore = 0;  // Zona neutra = sem vantagem
+                    } else {
+                        rsiScore = -10; // Sobrecompra = penalidade
+                    }
+                    score += rsiScore;
+                    
+                    // 2. COMPONENTE TENDÊNCIA/EMA (25% do score - max 25 pontos)
+                    let emaScore = 0;
+                    if (ema200 !== null) {
+                        if (currentPrice > ema200) {
+                            emaScore = 25; // Acima da EMA200 = tendência de alta
+                        } else if (currentPrice > ema200 * 0.95) {
+                            emaScore = 10; // Próximo da EMA200 = suporte potencial
+                        } else {
+                            emaScore = 0; // Abaixo da EMA200 = tendência de baixa
+                        }
+                    } else {
+                        // Sem EMA200, usar comparação de médias recentes
+                        const recentAvg = App.Calc.avg(closes.slice(-20));
+                        const olderAvg = App.Calc.avg(closes.slice(-50, -20));
+                        emaScore = recentAvg > olderAvg ? 15 : 0;
+                    }
+                    score += emaScore;
+                    
+                    // 3. COMPONENTE FASE WYCKOFF (30% do score - max 30 pontos)
+                    let phaseScore = 0;
+                    const priceRange = Math.max(...highs) - Math.min(...lows);
+                    const recentHigh = Math.max(...highs.slice(-20));
+                    const recentLow = Math.min(...lows.slice(-20));
+                    const pricePosition = (currentPrice - recentLow) / (recentHigh - recentLow);
+                    
+                    // Detectar fase com base em múltiplos fatores
                     if (rsi < 40 && currentPrice < bb.middle && adx.adx < 25) {
                         phase = 'Acumulação (Fase A-B)';
-                        score += 10;
-                    } else if (rsi > 60 && currentPrice > bb.middle && adx.adx > 25) {
+                        phaseScore = 30; // Melhor fase para compra
+                    } else if (rsi > 50 && rsi < 70 && currentPrice > bb.middle && adx.adx > 25 && adx.adx < 50) {
                         phase = 'Markup (Fase D)';
-                        score += 15;
+                        phaseScore = 25; // Boa fase para seguir tendência
                     } else if (rsi > 70 && currentPrice > bb.upper) {
                         phase = 'Distribuição';
-                        score -= 10;
+                        phaseScore = -10; // Fase de venda
                     } else if (rsi < 30 && currentPrice < bb.lower) {
                         phase = 'Markdown';
-                        score -= 15;
+                        phaseScore = -20; // Tendência de baixa forte
+                        // Mas pode ser oportunidade se houver sinais de reversão
+                        if (currentVolume > volumeAvg * 2) {
+                            phaseScore = 10; // Possível clímax de venda
+                            events.push('Potential Selling Climax');
+                        }
+                    } else if (adx.adx < 20) {
+                        phase = 'Consolidação/Range';
+                        phaseScore = 5; // Aguardar rompimento
                     } else {
-                        phase = 'Transição/Consolidação';
+                        phase = 'Transição';
+                        phaseScore = 0;
+                    }
+                    score += phaseScore;
+                    
+                    // 4. COMPONENTE SUPORTE/RESISTÊNCIA (15% do score - max 15 pontos)
+                    let srScore = 0;
+                    if (pricePosition < 0.2) {
+                        srScore = 15; // Muito próximo do suporte
+                    } else if (pricePosition < 0.4) {
+                        srScore = 10; // Próximo do suporte
+                    } else if (pricePosition > 0.8) {
+                        srScore = -5; // Próximo da resistência (risco)
+                    } else {
+                        srScore = 0; // Meio do range
+                    }
+                    score += srScore;
+                    
+                    // 5. COMPONENTE VOLUME (10% do score - max 10 pontos)
+                    let volumeScore = 0;
+                    if (recentAvgVolume > volumeAvg * 1.5) {
+                        volumeScore = 10; // Volume alto = interesse do mercado
+                    } else if (recentAvgVolume > volumeAvg) {
+                        volumeScore = 5; // Volume acima da média
+                    } else {
+                        volumeScore = 0; // Volume baixo
+                    }
+                    score += volumeScore;
+                    
+                    // DETECÇÃO DE EVENTOS WYCKOFF COM CONFIRMAÇÃO POR VOLUME
+                    // Spring Detection (aprimorado)
+                    const prevLow = Math.min(...lows.slice(-25, -5));
+                    const lastFiveLows = lows.slice(-5);
+                    const springCandidate = Math.min(...lastFiveLows);
+                    
+                    if (springCandidate < prevLow) {
+                        // Houve rompimento do suporte
+                        const springIndex = lastFiveLows.indexOf(springCandidate);
+                        const volumeAtSpring = volumes[volumes.length - 5 + springIndex];
+                        const priceRecovered = currentPrice > prevLow;
+                        
+                        if (priceRecovered && volumeAtSpring < volumeAvg * 1.3) {
+                            // Spring com volume moderado e recuperação = sinal forte
+                            events.push('Spring Confirmado');
+                            score += 10;
+                        } else if (priceRecovered) {
+                            events.push('Potential Spring');
+                            score += 5;
+                        }
                     }
                     
-                    // Ajustar score com base em volume
-                    if (currentVolume > volumeAvg * 1.5) {
-                        score += 5;
+                    // SOS Detection (aprimorado)
+                    const prevHigh = Math.max(...highs.slice(-25, -5));
+                    const lastFiveHighs = highs.slice(-5);
+                    const sosCandidate = Math.max(...lastFiveHighs);
+                    
+                    if (sosCandidate > prevHigh) {
+                        // Houve rompimento da resistência
+                        const recentVolumeAvg = App.Calc.avg(volumes.slice(-5));
+                        const priceHolding = currentPrice > prevHigh * 0.98;
+                        
+                        if (priceHolding && recentVolumeAvg > volumeAvg * 1.2) {
+                            // SOS com volume crescente e preço segurando = sinal forte
+                            events.push('SOS Confirmado');
+                            score += 10;
+                        } else if (priceHolding) {
+                            events.push('Potential SOS');
+                            score += 5;
+                        }
                     }
                     
-                    // Limitar score entre 0-100
-                    score = Math.max(0, Math.min(100, score));
+                    // UTAD Detection (distribuição)
+                    if (phase === 'Distribuição' && sosCandidate > prevHigh) {
+                        const volumeDecreasing = recentAvgVolume < volumeAvg;
+                        if (volumeDecreasing && currentPrice < sosCandidate * 0.98) {
+                            events.push('Potential UTAD');
+                            score -= 10;
+                        }
+                    }
+                    
+                    // Normalizar score entre 0-100
+                    // Score base pode variar de -45 a +100
+                    // Ajustar para escala 0-100
+                    score = Math.max(0, Math.min(100, score + 45));
                     
                     return {
                         phase,
                         events,
-                        score
+                        score,
+                        components: {
+                            rsi: rsiScore,
+                            ema: emaScore,
+                            phase: phaseScore,
+                            sr: srScore,
+                            volume: volumeScore
+                        }
                     };
                 },
                 
@@ -1109,16 +1324,17 @@
                     const atr = App.Calc.atr(highs, lows, closes);
                     const bb = App.Calc.bb(closes);
                     const ema200 = App.Calc.ema(closes, 200);
-                    const vwap = App.Calc.vwap(klines1h.slice(-24)); // VWAP das últimas 24 horas
+                    const vwap = App.Calc.vwap(klines1h); // VWAP com reset à meia-noite UTC
                     const adxData = App.Calc.adx(highs, lows, closes);
                     const obv = App.Calc.obv(closes, volumes);
-                    const fib = App.Calc.fibonacci(highs, lows);
+                    const obvChange = App.Calc.obvChange(closes, volumes); // Variação percentual do OBV
+                    const fib = App.Calc.fibonacci(highs, lows, closes);
                     const sr = App.Calc.supportResistance(klines1h);
-                    const wyckoff = App.Calc.wyckoffAnalysis(klines1h);
+                    const wyckoff = App.Calc.wyckoffAnalysis(klines1h, ema200);
                     
                     // Calcular variações de preço
                     const ch1h = closes.length >= 2 ? ((currentPrice / closes[closes.length - 2]) - 1) * 100 : 0;
-                    const ch24h = closes.length >= 25 ? ((currentPrice / closes[closes.length - 25]) - 1) * 100 : 0;
+                    const ch24h = closes.length >= 24 ? ((currentPrice / closes[closes.length - 24]) - 1) * 100 : 0;
                     
                     // Calcular variações de 7d e 30d usando dados diários
                     let ch7d = 0, ch30d = 0;
@@ -1165,6 +1381,7 @@
                         vwap,
                         adx: adxData.adx,
                         obv,
+                        obvChange, // Variação percentual do OBV
                         ch1h,
                         ch24h,
                         ch7d,
@@ -1210,7 +1427,7 @@
                         for (let t of App.State.tokens) {
                             try {
                                 let [r1, r2] = await Promise.all([
-                                    fetch(`https://api.binance.com/api/v3/klines?symbol=${t}&interval=1h&limit=250`),
+                                    fetch(`https://api.binance.com/api/v3/klines?symbol=${t}&interval=1h&limit=400`),
                                     fetch(`https://api.binance.com/api/v3/klines?symbol=${t}&interval=1d&limit=35`)
                                 ]);
                                 
@@ -1278,6 +1495,20 @@
 
             // 4. INTERFACE DO USUÁRIO
             UI: {
+                // Formatação adaptativa de decimais baseada no preço
+                formatPrice: (price, referencePrice = null) => {
+                    const ref = referencePrice || price;
+                    if (ref >= 1000) {
+                        return price.toFixed(2); // BTC, ETH em valores altos
+                    } else if (ref >= 1) {
+                        return price.toFixed(4); // Altcoins de valor médio
+                    } else if (ref >= 0.01) {
+                        return price.toFixed(6); // Altcoins de baixo valor
+                    } else {
+                        return price.toFixed(8); // Memecoins e microcaps
+                    }
+                },
+                
                 imgError: (img) => {
                     const card = img.closest('.card');
                     if (!card) return;
@@ -1371,7 +1602,7 @@
                     renderList(
                         'list-gainers', 
                         [...data].sort((a, b) => b.ch24h - a.ch24h),
-                        x => ({ val: '$' + x.price.toFixed(x.price < 1 ? 4 : 2), tip: 'val_price' }),
+                        x => ({ val: '$' + App.UI.formatPrice(x.price), tip: 'val_price' }),
                         x => ({ val: (x.ch24h > 0 ? '+' : '') + x.ch24h.toFixed(2) + '%', col: x.ch24h > 0 ? 'text-green-400' : 'text-red-400', tip: 'val_chg_24h' })
                     );
                     
@@ -1379,7 +1610,7 @@
                     renderList(
                         'list-losers', 
                         [...data].sort((a, b) => a.ch24h - b.ch24h),
-                        x => ({ val: '$' + x.price.toFixed(x.price < 1 ? 4 : 2), tip: 'val_price' }),
+                        x => ({ val: '$' + App.UI.formatPrice(x.price), tip: 'val_price' }),
                         x => ({ val: x.ch24h.toFixed(2) + '%', col: x.ch24h > 0 ? 'text-green-400' : 'text-red-400', tip: 'val_chg_24h' })
                     );
                     
@@ -1472,7 +1703,7 @@
                         // Preencher com dados se disponíveis
                         let metrics = App.State.metrics[symbol];
                         if (metrics) {
-                            card.querySelector('.price-display').innerText = '$' + metrics.price.toFixed(metrics.price < 1 ? 6 : 2);
+                            card.querySelector('.price-display').innerText = '$' + App.UI.formatPrice(metrics.price);
                             card.querySelector('.wyckoff-badge').innerText = metrics.phase;
                             
                             let scoreBadge = card.querySelector('.score-badge');
@@ -1509,17 +1740,23 @@
                             setTextWithColor('.val-7d', (metrics.ch7d > 0 ? '+' : '') + metrics.ch7d.toFixed(2) + '%', 'text-green-400', 'text-red-400');
                             setTextWithColor('.val-30d', (metrics.ch30d > 0 ? '+' : '') + metrics.ch30d.toFixed(2) + '%', 'text-green-400', 'text-red-400');
                             
-                            setText('.val-atr', metrics.atr.toFixed(4));
-                            setText('.val-ema', metrics.ema200 ? metrics.ema200.toFixed(4) : '--');
-                            setText('.val-vwap', metrics.vwap.toFixed(4));
-                            setText('.val-bb', `${metrics.bb.lower.toFixed(2)} - ${metrics.bb.upper.toFixed(2)}`);
-                            setText('.val-macd', metrics.macd.toFixed(4));
-                            setText('.val-obv', (metrics.obv / 1000000).toFixed(1) + 'M');
+                            // Formatação adaptativa baseada no preço
+                            setText('.val-atr', App.UI.formatPrice(metrics.atr, metrics.price));
+                            setText('.val-ema', metrics.ema200 ? App.UI.formatPrice(metrics.ema200, metrics.price) : '--');
+                            setText('.val-vwap', App.UI.formatPrice(metrics.vwap, metrics.price));
+                            setText('.val-bb', `${App.UI.formatPrice(metrics.bb.lower, metrics.price)} - ${App.UI.formatPrice(metrics.bb.upper, metrics.price)}`);
+                            setText('.val-macd', App.UI.formatPrice(metrics.macd, metrics.price));
+                            // OBV agora mostra variação percentual (normalizado)
+                            const obvText = metrics.obvChange !== undefined ? 
+                                (metrics.obvChange > 0 ? '+' : '') + metrics.obvChange.toFixed(1) + '%' : 
+                                (metrics.obv / 1000000).toFixed(1) + 'M';
+                            setText('.val-obv', obvText);
                             
-                            if (metrics.fib.retracement) {
-                                setText('.val-f1618', metrics.fib.retracement[0.618] ? metrics.fib.retracement[0.618].toFixed(4) : '--');
-                                setText('.val-f0618', metrics.fib.retracement[0.382] ? metrics.fib.retracement[0.382].toFixed(4) : '--');
-                                setText('.val-f0382', metrics.fib.retracement[0.236] ? metrics.fib.retracement[0.236].toFixed(4) : '--');
+                            if (metrics.fib) {
+                                // Corrigido: 1.618 é extensão, não retração
+                                setText('.val-f1618', metrics.fib.extension && metrics.fib.extension[1.618] ? App.UI.formatPrice(metrics.fib.extension[1.618], metrics.price) : '--');
+                                setText('.val-f0618', metrics.fib.retracement && metrics.fib.retracement[0.618] ? App.UI.formatPrice(metrics.fib.retracement[0.618], metrics.price) : '--');
+                                setText('.val-f0382', metrics.fib.retracement && metrics.fib.retracement[0.382] ? App.UI.formatPrice(metrics.fib.retracement[0.382], metrics.price) : '--');
                             }
                             
                             setText('.val-vsbtc', metrics.vsBtc.toFixed(2) + '%');
@@ -1541,7 +1778,7 @@
                     if (!priceElement) return;
                     
                     let previousPrice = +priceElement.dataset.lastPrice || price;
-                    priceElement.innerText = '$' + price.toFixed(price < 1 ? 6 : 2);
+                    priceElement.innerText = '$' + App.UI.formatPrice(price);
                     priceElement.dataset.lastPrice = price;
                     
                     // Efeito de pulso para mudanças de preço
@@ -1634,7 +1871,7 @@
 
             // 5. GERENCIAMENTO DE TOKENS
             Token: {
-                add: () => {
+                add: async () => {
                     let input = document.getElementById('add-input');
                     if (!input) return;
                     
@@ -1656,15 +1893,77 @@
                     App.State.tokens.push(symbol);
                     localStorage.setItem('wyckoff_tokens', JSON.stringify(App.State.tokens));
                     
-                    // Recarregar dados
-                    location.reload();
+                    // Buscar dados do novo token dinamicamente
+                    try {
+                        const [r1, r2] = await Promise.all([
+                            fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1h&limit=400`),
+                            fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&limit=35`)
+                        ]);
+                        
+                        if (!r1.ok || !r2.ok) {
+                            throw new Error('Token não encontrado na Binance');
+                        }
+                        
+                        const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
+                        
+                        App.State.klines1h[symbol] = d1.map(x => ({
+                            time: x[0] / 1000,
+                            o: +x[1],
+                            h: +x[2],
+                            l: +x[3],
+                            c: +x[4],
+                            v: +x[5]
+                        }));
+                        
+                        App.State.klines1d[symbol] = d2.map(x => ({ c: +x[4] }));
+                        
+                        App.State.metrics[symbol] = App.Calc.run(
+                            symbol, 
+                            App.State.klines1h[symbol], 
+                            App.State.klines1d[symbol], 
+                            App.State.cache.btc1d
+                        );
+                        
+                        // Atualizar UI dinamicamente
+                        App.UI.grid();
+                        App.UI.tables();
+                        
+                        // Reconectar WebSocket com novo token
+                        App.Data.ws();
+                        
+                        // Limpar input
+                        input.value = '';
+                        
+                    } catch (error) {
+                        // Reverter adição em caso de erro
+                        App.State.tokens = App.State.tokens.filter(t => t !== symbol);
+                        localStorage.setItem('wyckoff_tokens', JSON.stringify(App.State.tokens));
+                        alert('Erro ao adicionar token: ' + error.message);
+                    }
                 },
                 
                 rem: (symbol) => {
                     if (confirm(`Remover ${symbol} da lista?`)) {
                         App.State.tokens = App.State.tokens.filter(t => t !== symbol);
                         localStorage.setItem('wyckoff_tokens', JSON.stringify(App.State.tokens));
-                        location.reload();
+                        
+                        // Remover dados do token
+                        delete App.State.klines1h[symbol];
+                        delete App.State.klines1d[symbol];
+                        delete App.State.metrics[symbol];
+                        
+                        // Remover gráfico se existir
+                        if (App.State.charts[symbol]) {
+                            App.State.charts[symbol].chart.remove();
+                            delete App.State.charts[symbol];
+                        }
+                        
+                        // Atualizar UI dinamicamente
+                        App.UI.grid();
+                        App.UI.tables();
+                        
+                        // Reconectar WebSocket sem o token removido
+                        App.Data.ws();
                     }
                 }
             },
