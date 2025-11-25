@@ -1010,7 +1010,7 @@
                         retracement = {
                             0.236: swingLow + range * (1 - 0.236), // Retração rasa
                             0.382: swingLow + range * (1 - 0.382),
-                            0.5: swingLow + range * 0.5,
+                            0.5: swingLow + range * (1 - 0.5),     // Midpoint (50%)
                             0.618: swingLow + range * (1 - 0.618), // Golden ratio
                             0.786: swingLow + range * (1 - 0.786)  // Retração profunda
                         };
@@ -1026,7 +1026,7 @@
                         retracement = {
                             0.236: swingHigh - range * (1 - 0.236),
                             0.382: swingHigh - range * (1 - 0.382),
-                            0.5: swingHigh - range * 0.5,
+                            0.5: swingHigh - range * (1 - 0.5),     // Midpoint (50%)
                             0.618: swingHigh - range * (1 - 0.618),
                             0.786: swingHigh - range * (1 - 0.786)
                         };
@@ -1273,9 +1273,11 @@
                     }
                     
                     // Normalizar score entre 0-100
-                    // Score base pode variar de -45 a +100
-                    // Ajustar para escala 0-100
-                    score = Math.max(0, Math.min(100, score + 45));
+                    // Score mínimo possível: RSI(-10) + EMA(0) + Phase(-20) + SR(-5) + Volume(0) = -35
+                    // Score máximo possível: RSI(20) + EMA(25) + Phase(30) + SR(15) + Volume(10) + eventos(~25) = 125
+                    // Com offset de 45, range vai de 10 a 170, limitado a 0-100
+                    const SCORE_OFFSET = 45; // Ajuste para garantir scores positivos na maioria dos casos
+                    score = Math.max(0, Math.min(100, score + SCORE_OFFSET));
                     
                     return {
                         phase,
