@@ -920,8 +920,11 @@
                     let obvCurrent = 0;
                     let obv24hAgo = 0;
                     
+                    // Calcular índice seguro para início do período de 24h
+                    const startIndex24h = Math.max(1, closes.length - 24);
+                    
                     // OBV até 24h atrás
-                    for (let i = 1; i < closes.length - 24; i++) {
+                    for (let i = 1; i < startIndex24h; i++) {
                         if (closes[i] > closes[i - 1]) {
                             obv24hAgo += volumes[i];
                         } else if (closes[i] < closes[i - 1]) {
@@ -929,9 +932,9 @@
                         }
                     }
                     
-                    // OBV completo (atual)
+                    // OBV completo (atual) - começa do OBV anterior
                     obvCurrent = obv24hAgo;
-                    for (let i = closes.length - 24; i < closes.length; i++) {
+                    for (let i = startIndex24h; i < closes.length; i++) {
                         if (closes[i] > closes[i - 1]) {
                             obvCurrent += volumes[i];
                         } else if (closes[i] < closes[i - 1]) {
